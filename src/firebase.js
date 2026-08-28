@@ -6,4 +6,4 @@
 //   Android emulator → http://10.0.2.2:3001
 //   Real phone (WiFi) → http://YOUR_PC_IP:3001
 
-export const API_BASE = import.meta.env.VITE_API_BASE || 'https://blast-backend.onrender.com';
+export const API_BASE = import.meta.env.VITE_API_BASE || 'https://blast-backend-7x2d.onrender.com';
