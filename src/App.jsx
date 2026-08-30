@@ -969,6 +969,150 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
   );
 }
 
+// ─── PAIRING GAME (Visual Matching) ────────────────────────────────────────
+function PairingGame({category,speed,onEarn,onBack,student}){
+  const [pairs,setPairs]=useState([]);
+  const [matched,setMatched]=useState(new Set());
+  const [selected,setSelected]=useState([]);
+  const [showConfetti,setShowConfetti]=useState(false);
+  const [compliment,setCompliment]=useState("");
+  const [timerKey,setTimerKey]=useState(0);
+  const timeLimit=speed==="fast"?20:45;
+  const totalPairs=6;
+
+  useEffect(()=>{generatePairs();},[category]);
+
+  function generatePairs(){
+    let pairList=[];
+    if(category.id==="alphabets"){
+      const letters=shuffle(ALPHABET).slice(0,totalPairs);
+      pairList=letters.map(l=>([
+        {id:`u-${l}`,type:"letter",value:l,display:l},
+        {id:`l-${l}`,type:"letter",value:l,display:l.toLowerCase()}
+      ])).flat();
+    }else if(category.id==="numbers"){
+      const nums=shuffle(NUMBERS).slice(0,totalPairs);
+      pairList=nums.map(n=>([
+        {id:`num-${n}`,type:"number",value:n,display:n},
+        {id:`obj-${n}`,type:"number",value:n,display:`${n} objects`}
+      ])).flat();
+    }else if(category.id==="colors"){
+      const colors=shuffle(COLORS).slice(0,totalPairs);
+      pairList=colors.map(c=>([
+        {id:`rect-${c.hex}`,type:"color",value:c.hex,display:c.hex,label:c.name},
+        {id:`name-${c.hex}`,type:"color",value:c.hex,display:c.name}
+      ])).flat();
+    }else if(category.id==="shapes"){
+      const shapes=shuffle(SHAPES).slice(0,totalPairs);
+      pairList=shapes.map(s=>([
+        {id:`emoji-${s.name}`,type:"shape",value:s.name,display:s.emoji},
+        {id:`name-${s.name}`,type:"shape",value:s.name,display:s.name}
+      ])).flat();
+    }
+    setPairs(shuffle(pairList));
+    setMatched(new Set());
+    setSelected([]);
+    setCompliment("");
+    setTimerKey(k=>k+1);
+  }
+
+  function handleTimeout(){
+    if(matched.size===totalPairs*2)return;
+    const msg=randomOf(WRONG_COMPLIMENTS);
+    setCompliment(msg);
+    playTimeout();
+    setTimeout(()=>speak(msg,0.9),300);
+  }
+
+  function handlePairClick(pairItem){
+    if(matched.has(pairItem.id)||selected.some(s=>s.id===pairItem.id))return;
+    playTick();
+    const newSelected=[...selected,pairItem];
+    setSelected(newSelected);
+    if(newSelected.length===2){
+      const match=newSelected[0].value===newSelected[1].value;
+      if(match){
+        const msg=randomOf(CORRECT_COMPLIMENTS);
+        setCompliment(msg);
+        playCorrect();onEarn(1);
+        setShowConfetti(true);
+        setMatched(new Set([...matched,newSelected[0].id,newSelected[1].id]));
+        setTimeout(()=>speak(msg,0.9),300);
+        setTimeout(()=>setShowConfetti(false),2500);
+        setTimeout(()=>setSelected([]),800);
+      }else{
+        const msg=randomOf(WRONG_COMPLIMENTS);
+        setCompliment(msg);
+        playWrong();
+        setTimeout(()=>speak(msg,0.9),200);
+        setTimeout(()=>setSelected([]),1200);
+      }
+    }
+  }
+
+  const isDone=matched.size===totalPairs*2;
+
+  if(isDone)return <GameResult score={matched.size/2} total={totalPairs} emoji="🎉" title="PERFECT!" onBack={onBack} student={student}/>;
+
+  const renderItem=(item)=>{
+    if(category.id==="numbers"&&item.type==="number"&&item.id.startsWith("obj-")){
+      const num=parseInt(item.id.split("-")[1]);
+      return(
+        <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center",alignItems:"center"}}>
+          {Array.from({length:num}).map((_,i)=><div key={i} style={{width:20,height:20,borderRadius:"50%",background:"#FFD700",boxShadow:"0 0 8px #FFD700"}}/>)}
+        </div>
+      );
+    }else if(category.id==="colors"&&item.type==="color"&&item.id.startsWith("rect-")){
+      return(
+        <div style={{width:80,height:80,borderRadius:12,background:item.display,border:"3px solid white",boxShadow:`0 0 12px ${item.display}88`}}/>
+      );
+    }else if(category.id==="shapes"&&item.type==="shape"&&item.id.startsWith("emoji-")){
+      return <div style={{fontSize:"3rem"}}>{item.display}</div>;
+    }else if(category.id==="shapes"&&item.type==="shape"&&item.id.startsWith("name-")){
+      const shape=SHAPES.find(s=>s.name===item.value);
+      return <img src={shape?.image} alt={item.display} style={{width:60,height:60,objectFit:"contain"}}/>;
+    }
+    return <div style={{fontSize:category.id==="alphabets"?"2.5rem":"1.8rem",fontWeight:900,fontFamily:"'Lilita One',cursive"}}>{item.display}</div>;
+  };
+
+  return(
+    <div style={S.page}><GlobalStyles/><BgSpace/><MusicBtn type="game"/>
+      {showConfetti&&<Confetti/>}
+      <div style={{position:"relative",zIndex:1}}>
+        <button className="b-btn" style={S.backBtn} onClick={()=>{playTick();stopBgMusic();startBgMusic("menu");onBack();}}>← Back</button>
+        <h2 style={{...S.title,fontSize:"1.6rem",textAlign:"center",margin:"4px 0 6px"}}>🃏 Tap and Match!</h2>
+        <p style={{textAlign:"center",color:"#aaa",fontWeight:700,marginBottom:8,fontFamily:"'Baloo 2',cursive"}}>Matched: {matched.size/2}/{totalPairs} | ⭐{matched.size/2}</p>
+        {matched.size<totalPairs*2&&<CountdownTimer key={timerKey} seconds={timeLimit} onDone={handleTimeout} speed={speed}/>}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,maxWidth:380,margin:"12px auto",padding:"0 12px"}}>
+          {pairs.map((item,idx)=>(
+            <button key={item.id} className="b-btn" onClick={()=>handlePairClick(item)} disabled={matched.has(item.id)} style={{
+              padding:"16px 12px",borderRadius:16,border:"3px solid",cursor:matched.has(item.id)?"default":"pointer",
+              background:matched.has(item.id)?"linear-gradient(135deg,#90EE90,#00DD00)":"linear-gradient(135deg,#E3F2FD,#B3E5FC)",
+              color:matched.has(item.id)?"#fff":"#1565C0",
+              borderColor:matched.has(item.id)?"#00DD00":"#90CAF9",
+              fontWeight:900,fontSize:"1rem",
+              boxShadow:matched.has(item.id)?"0 4px 15px #00DD0088":"0 3px 10px rgba(0,0,0,0.1)",
+              transform:selected.some(s=>s.id===item.id)?"scale(0.95)":"scale(1)",
+              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:100,
+              opacity:matched.has(item.id)?0.6:1,
+              animation:matched.has(item.id)?"pop 0.4s ease":"none",
+              transition:"all 0.15s"
+            }}>
+              {renderItem(item)}
+              <div style={{fontSize:"0.75rem",fontWeight:700,marginTop:6,color:"inherit"}}>{item.type==="number"&&!item.id.startsWith("obj-")?item.display:item.type==="color"&&item.id.startsWith("rect-")?"Color":item.label||""}</div>
+            </button>
+          ))}
+        </div>
+        {compliment&&(
+          <div className="b-compliment" style={{textAlign:"center",color:"#006400",fontSize:"1rem",fontWeight:900,margin:"12px 0",fontFamily:"'Baloo 2',cursive"}}>
+            ✅ {compliment}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── VOICE ACTIVITY ────────────────────────────────────────────────────────
 function VoiceActivity({category,speed,onEarn,onBack,student}){
   const [items,setItems]               = useState([]);
@@ -1376,14 +1520,18 @@ function ActivityPicker({category,student,onPick,onBack}){
           <h2 style={{...S.title,fontSize:"1.9rem",margin:"4px 0"}}>{category.label} Games</h2>
           <p style={{color:"#FFD700",fontWeight:800,fontFamily:"'Baloo 2',cursive",textShadow:"0 0 8px #FFD700"}}>⭐ {student.stars} stars</p>
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:18,maxWidth:360,margin:"0 auto"}}>
-          <button className="b-btn" style={{...S.modeBtn,background:"linear-gradient(135deg,#7B3F00,#FF6B00)"}} onClick={()=>{playPop();onPick("voice");}}>
-            <span className="b-wiggle" style={{fontSize:"3rem",filter:"drop-shadow(0 0 10px rgba(255,107,0,0.6))"}}>🎤</span>
-            <div><div style={{fontWeight:800,fontSize:"1.3rem"}}>TALK TO WIN!</div><div style={{fontSize:"0.85rem",opacity:0.9}}>Say the answer aloud</div></div>
+        <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:380,margin:"0 auto",padding:"0 12px"}}>
+          <button className="b-btn" style={{...S.modeBtn,background:"linear-gradient(135deg,#FF6B9D,#FF1493)",height:"auto"}} onClick={()=>{playPop();onPick("pairing");}}>
+            <span className="b-wiggle" style={{fontSize:"2.5rem",filter:"drop-shadow(0 0 10px rgba(255,107,157,0.6))"}}>🃏</span>
+            <div><div style={{fontWeight:800,fontSize:"1.2rem"}}>PAIR THEM UP!</div><div style={{fontSize:"0.78rem",opacity:0.9}}>Match the pairs together</div></div>
           </button>
-          <button className="b-btn" style={{...S.modeBtn,background:"linear-gradient(135deg,#2E0060,#8800FF)"}} onClick={()=>{playPop();onPick("matching");}}>
-            <span className="b-wiggle" style={{fontSize:"3rem",animationDelay:"0.3s",filter:"drop-shadow(0 0 10px rgba(136,0,255,0.6))"}}>🃏</span>
-            <div><div style={{fontWeight:800,fontSize:"1.3rem"}}>TAP AND MATCH!</div><div style={{fontSize:"0.85rem",opacity:0.9}}>Tap the right answer</div></div>
+          <button className="b-btn" style={{...S.modeBtn,background:"linear-gradient(135deg,#7B3F00,#FF6B00)",height:"auto"}} onClick={()=>{playPop();onPick("voice");}}>
+            <span className="b-wiggle" style={{fontSize:"2.5rem",filter:"drop-shadow(0 0 10px rgba(255,107,0,0.6))"}}>🎤</span>
+            <div><div style={{fontWeight:800,fontSize:"1.2rem"}}>TALK TO WIN!</div><div style={{fontSize:"0.78rem",opacity:0.9}}>Say the answer aloud</div></div>
+          </button>
+          <button className="b-btn" style={{...S.modeBtn,background:"linear-gradient(135deg,#2E0060,#8800FF)",height:"auto"}} onClick={()=>{playPop();onPick("matching");}}>
+            <span className="b-wiggle" style={{fontSize:"2.5rem",animationDelay:"0.3s",filter:"drop-shadow(0 0 10px rgba(136,0,255,0.6))"}}>❓</span>
+            <div><div style={{fontWeight:800,fontSize:"1.2rem"}}>PICK THE RIGHT ONE!</div><div style={{fontSize:"0.78rem",opacity:0.9}}>Tap the correct answer</div></div>
           </button>
         </div>
       </div>
@@ -1518,8 +1666,9 @@ export default function App(){
   else if(screen==="teacher") content=<TeacherDashboard students={students} onDeleteStudent={deleteStudent} onBack={()=>setScreen("home")}/>;
   else if(screen==="categories") content=<CategoryPicker student={currentStudent} onPick={cat=>{setSelectedCategory(cat);setScreen("mode");}} onHome={()=>setScreen("home")}/>;
   else if(screen==="mode") content=<ModePicker category={selectedCategory} student={currentStudent} onMode={m=>setScreen(m==="module"?"module":"activity_pick")} onBack={()=>setScreen("categories")}/>;
-  else if(screen==="activity_pick") content=<ActivityPicker category={selectedCategory} student={currentStudent} onPick={t=>setScreen(t==="voice"?"voice":"matching")} onBack={()=>setScreen("mode")}/>;
+  else if(screen==="activity_pick") content=<ActivityPicker category={selectedCategory} student={currentStudent} onPick={t=>setScreen(t==="voice"?"voice":t==="pairing"?"pairing":"matching")} onBack={()=>setScreen("mode")}/>;
   else if(screen==="voice") content=<VoiceActivity category={selectedCategory} speed={speed} onEarn={earnStar} onBack={()=>setScreen("categories")} student={currentStudent}/>;
+  else if(screen==="pairing") content=<PairingGame category={selectedCategory} speed={speed} onEarn={earnStar} onBack={()=>setScreen("categories")} student={currentStudent}/>;
   else if(screen==="matching") content=<MatchingActivity category={selectedCategory} speed={speed} onEarn={earnStar} onBack={()=>setScreen("categories")} student={currentStudent}/>;
   else if(screen==="module"){
     if(selectedCategory.id==="alphabets") content=<AlphabetModule onBack={()=>setScreen("mode")}/>;
