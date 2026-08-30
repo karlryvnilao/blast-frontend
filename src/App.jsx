@@ -4,15 +4,18 @@ import { LOGO } from "./logo.js";
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const NUMBERS  = Array.from({ length: 10 }, (_, i) => i);
 const SHAPES = [
-  { name:"Circle",   emoji:"🔵"},{name:"Square",    emoji:"🟦"},
-  { name:"Triangle", emoji:"🔷"},{name:"Rectangle", emoji:"🟪"},
-  { name:"Star",     emoji:"🔷"},{name:"Heart",     emoji:"🔵"},
-  { name:"Diamond",  emoji:"🔷"},{name:"Oval",      emoji:"🔵"},
-  { name:"Pentagon", emoji:"🟦"},{name:"Hexagon",   emoji:"🟦"},
+  { name:"Heart",     emoji:"♡", color:"#FF4FA3", image:"/images/heart.png" },
+  { name:"Diamond",   emoji:"⃟", color:"#24C6FF", image:"/images/diamond.png" },
+  { name:"Circle",    emoji:"◯", color:"#FFB800", image:"/images/circle.png" },
+  { name:"Rectangle", emoji:"▭", color:"#7C4DFF", image:"/images/rect.png" },
+  { name:"Square",    emoji:"☐", color:"#00C853", image:"/images/square.png" },
+  { name:"Star",      emoji:"☆", color:"#FFD93D", image:"/images/star.png" },
+  { name:"Oval",      emoji:"⬭", color:"#FF6F61", image:"/images/oval.png" },
+  { name:"Triangle",  emoji:"△", color:"#3EA7FF", image:"/images/tria.png" },
 ];
 const COLORS = [
   {name:"Red",hex:"#FF4444"},{name:"Blue",hex:"#4488FF"},{name:"Yellow",hex:"#FFDD00"},
-  {name:"Green",hex:"#44BB44"},{name:"Orange",hex:"#FF8800"},{name:"Purple",hex:"#9944CC"},
+  {name:"Green",hex:"#44BB44"},{name:"Orange",hex:"#FF8800"},{name:"Violet",hex:"#9944CC"},
   {name:"Pink",hex:"#FF77AA"},{name:"Brown",hex:"#885533"},{name:"Black",hex:"#222222"},{name:"White",hex:"#EEEEEE"},
 ];
 const CATEGORIES = [
@@ -22,7 +25,7 @@ const CATEGORIES = [
   {id:"colors",label:"Colors",emoji:"🎨",color1:"#00FF88",color2:"#007744",mascot:"🦋",glow:"#00FF88"},
 ];
 const EMOJIS={A:"🍎",B:"⚽",C:"🐱",D:"🐶",E:"🐘",F:"🐟",G:"🐐",H:"🎩",I:"🏔️",J:"🫙",K:"🪁",L:"🦁",M:"🌙",N:"🪺",O:"🍊",P:"✏️",Q:"👑",R:"🌧️",S:"☀️",T:"🌲",U:"☂️",V:"🚐",W:"💧",X:"🩻",Y:"🧶",Z:"🦓"};
-const NUM_EMOJI=["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
+const NUM_EMOJI=["zero","one","two","three","four","five","six","seven","eight","nine"];
 
 const AVATARS=[
   {id:"unicorn",emoji:"🦄",label:"Unicorn",bg:"linear-gradient(135deg,#FF77DD,#AA00FF)"},
@@ -114,25 +117,19 @@ let _bgOn = true;
 let _bgNodes = [];
 let _bgLoopTimeout = null;
 let _currentMusicType = null;
-let _masterGain = null;
+let _youtubeFrame = null;
+const YOUTUBE_TRACK_ID = "PcB84rIl9ns";
 
-function getMasterGain() {
-  const ctx = getCtx();
-  if (!_masterGain) {
-    _masterGain = ctx.createGain();
-    _masterGain.gain.value = 1.0;
-    _masterGain.connect(ctx.destination);
-  }
-  return _masterGain;
+function sendYoutubeCommand(func, args=[]) {
+  if (!_youtubeFrame?.contentWindow) return;
+  _youtubeFrame.contentWindow.postMessage(JSON.stringify({event:"command",func,args}), "https://www.youtube.com");
 }
-
-function duckMusic()   { try { getMasterGain().gain.linearRampToValueAtTime(0.15, getCtx().currentTime + 0.2); } catch(_){} }
-function unduckMusic() { try { getMasterGain().gain.linearRampToValueAtTime(1.0,  getCtx().currentTime + 0.3); } catch(_){} }
 
 function stopBgMusic() {
   if (_bgLoopTimeout) { clearTimeout(_bgLoopTimeout); _bgLoopTimeout = null; }
   _bgNodes.forEach(n => { try { n.stop(0); } catch(_){} });
   _bgNodes = [];
+  sendYoutubeCommand("pauseVideo");
   _currentMusicType = null;
 }
 
@@ -147,7 +144,7 @@ function note(ctx, freq, start, dur, vol=0.12, type="square", detune=0) {
   try {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(getMasterGain());
+    osc.connect(gain); gain.connect(ctx.destination);
     osc.type = type;
     osc.frequency.value = freq;
     osc.detune.value = detune;
@@ -166,7 +163,7 @@ function kick(ctx, start) {
   try {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(getMasterGain());
+    osc.connect(gain); gain.connect(ctx.destination);
     osc.type = "sine";
     osc.frequency.setValueAtTime(160, start);
     osc.frequency.exponentialRampToValueAtTime(30, start + 0.18);
@@ -188,7 +185,7 @@ function hihat(ctx, start, vol=0.06) {
     const gain = ctx.createGain();
     filter.type = "highpass"; filter.frequency.value = 7000;
     src.buffer = buf;
-    src.connect(filter); filter.connect(gain); gain.connect(getMasterGain());
+    src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
     gain.gain.setValueAtTime(vol, start);
     gain.gain.exponentialRampToValueAtTime(0.001, start + 0.04);
     src.start(start);
@@ -197,128 +194,99 @@ function hihat(ctx, start, vol=0.06) {
 }
 
 // ── MENU MUSIC: cheerful, bouncy, child-friendly ──────────────────────────
-// Key of C major, 120 BPM feel
+// Simple major-key melody to sound like a playful classroom song.
 function playMenuLoop() {
   if (!_bgOn || _currentMusicType !== "menu") return;
   try {
     const ctx = getCtx();
     const now = ctx.currentTime;
-    const BPM = 120;
-    const B = 60 / BPM; // beat duration
+    const BPM = 100;
+    const B = 60 / BPM;
 
-    // ── Melody (glockenspiel-like, triangle wave) ──
     const melody = [
-    // bar 1: C D E G  E D C E
-      {f:523,t:0},{f:587,t:0.5},{f:659,t:1},{f:784,t:1.5},
-      {f:659,t:2},{f:587,t:2.5},{f:523,t:3},{f:659,t:3.5},
-    // bar 2: A G F E  D C D E
-      {f:880,t:4},{f:784,t:4.5},{f:698,t:5},{f:659,t:5.5},
-      {f:587,t:6},{f:523,t:6.5},{f:587,t:7},{f:659,t:7.5},
-    // bar 3: C E G C(hi)  G E C G
-      {f:523,t:8},{f:659,t:8.5},{f:784,t:9},{f:1047,t:9.5},
-      {f:784,t:10},{f:659,t:10.5},{f:523,t:11},{f:784,t:11.5},
-    // bar 4: F E D C  D E G C
-      {f:698,t:12},{f:659,t:12.5},{f:587,t:13},{f:523,t:13.5},
-      {f:587,t:14},{f:659,t:14.5},{f:784,t:15},{f:523,t:15.5},
+      // C major happy tune
+      {f:523,t:0},{f:659,t:0.5},{f:784,t:1},{f:659,t:1.5},
+      {f:587,t:2},{f:659,t:2.5},{f:784,t:3},{f:659,t:3.5},
+      {f:523,t:4},{f:587,t:4.5},{f:659,t:5},{f:784,t:5.5},
+      {f:659,t:6},{f:587,t:6.5},{f:523,t:7},{f:392,t:7.5},
+      {f:440,t:8},{f:587,t:8.5},{f:659,t:9},{f:587,t:9.5},
+      {f:523,t:10},{f:440,t:10.5},{f:392,t:11},{f:440,t:11.5},
+      {f:523,t:12},{f:659,t:12.5},{f:784,t:13},{f:659,t:13.5},
+      {f:587,t:14},{f:523,t:14.5},{f:392,t:15},{f:523,t:15.5},
     ];
-    melody.forEach(({f,t}) => note(ctx, f, now + t*B, B*0.45, 0.14, "triangle"));
+    melody.forEach(({f,t}) => note(ctx, f, now + t*B, B*0.42, 0.11, "triangle"));
 
-    // ── Counter melody (higher octave bells) ──
     const bells = [
-      {f:1047,t:1},{f:1175,t:3},{f:1047,t:5},{f:880,t:7},
-      {f:1319,t:9},{f:1047,t:11},{f:880,t:13},{f:1047,t:15},
+      {f:1047,t:1},{f:1175,t:3},{f:1047,t:5},{f:1319,t:7},
+      {f:1175,t:9},{f:1047,t:11},{f:987,t:13},{f:1047,t:15},
     ];
-    bells.forEach(({f,t}) => note(ctx, f, now + t*B, B*0.35, 0.07, "sine"));
+    bells.forEach(({f,t}) => note(ctx, f, now + t*B, B*0.32, 0.06, "sine"));
 
-    // ── Bass line (square wave, low) ──
     const bass = [
-      {f:131,t:0},{f:131,t:2},{f:110,t:4},{f:110,t:6},
-      {f:131,t:8},{f:131,t:10},{f:175,t:12},{f:131,t:14},
+      {f:131,t:0},{f:131,t:2},{f:98,t:4},{f:98,t:6},
+      {f:131,t:8},{f:131,t:10},{f:98,t:12},{f:98,t:14},
     ];
-    bass.forEach(({f,t}) => note(ctx, f, now + t*B, B*1.8, 0.1, "sawtooth"));
+    bass.forEach(({f,t}) => note(ctx, f, now + t*B, B*1.2, 0.07, "sine"));
 
-    // ── Chords (warm pad) ──
-    const chords = [
-      [523,659,784], [523,659,784],
-      [440,554,659], [440,554,659],
-      [523,659,784], [523,659,784],
-      [349,440,523], [523,659,784],
+    const pad = [
+      [523,659,784], [392,523,659],
+      [440,587,698], [349,440,523],
+      [523,659,784], [392,523,659],
+      [440,587,698], [349,440,523],
     ];
-    chords.forEach((chord, i) => {
-      chord.forEach(f => note(ctx, f, now + i*2*B, B*1.9, 0.04, "sine", 5));
+    pad.forEach((chord, i) => {
+      chord.forEach(f => note(ctx, f, now + i*2*B, B*1.5, 0.025, "sine", 3));
     });
 
-    // ── Drums ──
     for (let i = 0; i < 16; i++) {
-      if (i % 4 === 0) kick(ctx, now + i*B);          // kick on beat
-      if (i % 2 !== 0) hihat(ctx, now + i*B, 0.05);   // hihat offbeats
+      if (i % 4 === 0) kick(ctx, now + i*B, 0.22);
+      if (i % 2 !== 0) hihat(ctx, now + i*B, 0.03);
     }
 
-    // Loop after 16 beats
     const loopDur = 16 * B * 1000;
     _bgLoopTimeout = setTimeout(playMenuLoop, loopDur - 50);
   } catch(_) {}
 }
 
-// ── GAME MUSIC: fast, hype, exciting energy ────────────────────────────────
-// Key of A minor, 150 BPM — energetic and urgent
+// ── GAME MUSIC: fun, cheerful, and still upbeat for kids ──────────────────
+// Keeps the energy but softens the notes and rhythm so it feels playful rather than intense.
 function playGameLoop() {
   if (!_bgOn || _currentMusicType !== "game") return;
   try {
     const ctx = getCtx();
     const now = ctx.currentTime;
-    const BPM = 150;
+    const BPM = 110;
     const B = 60 / BPM;
 
-    // ── Fast hype melody ──
     const melody = [
-    // bar 1
-      {f:880,t:0},{f:988,t:0.5},{f:1047,t:1},{f:880,t:1.5},
-      {f:784,t:2},{f:880,t:2.5},{f:988,t:3},{f:1047,t:3.5},
-    // bar 2
-      {f:1175,t:4},{f:1047,t:4.5},{f:988,t:5},{f:880,t:5.5},
-      {f:784,t:6},{f:698,t:6.5},{f:784,t:7},{f:880,t:7.5},
-    // bar 3 — climax
-      {f:1319,t:8},{f:1175,t:8.5},{f:1047,t:9},{f:988,t:9.5},
-      {f:880,t:10},{f:784,t:10.5},{f:698,t:11},{f:784,t:11.5},
-    // bar 4 — resolve
-      {f:880,t:12},{f:988,t:12.5},{f:1047,t:13},{f:1175,t:13.5},
-      {f:1319,t:14},{f:1175,t:14.5},{f:1047,t:15},{f:880,t:15.5},
+      {f:659,t:0},{f:783,t:0.5},{f:880,t:1},{f:783,t:1.5},
+      {f:698,t:2},{f:783,t:2.5},{f:880,t:3},{f:987,t:3.5},
+      {f:1047,t:4},{f:880,t:4.5},{f:783,t:5},{f:698,t:5.5},
+      {f:659,t:6},{f:587,t:6.5},{f:659,t:7},{f:783,t:7.5},
+      {f:880,t:8},{f:987,t:8.5},{f:1047,t:9},{f:880,t:9.5},
+      {f:783,t:10},{f:698,t:10.5},{f:659,t:11},{f:587,t:11.5},
+      {f:659,t:12},{f:783,t:12.5},{f:880,t:13},{f:1047,t:13.5},
+      {f:987,t:14},{f:880,t:14.5},{f:783,t:15},{f:659,t:15.5},
     ];
-    melody.forEach(({f,t}) => note(ctx, f, now + t*B, B*0.4, 0.13, "square"));
+    melody.forEach(({f,t}) => note(ctx, f, now + t*B, B*0.38, 0.1, "triangle"));
 
-    // ── Punchy counter melody ──
     const counter = [
-      {f:659,t:1},{f:698,t:3},{f:784,t:5},{f:659,t:7},
-      {f:880,t:9},{f:784,t:11},{f:698,t:13},{f:784,t:15},
+      {f:523,t:1},{f:587,t:3},{f:659,t:5},{f:587,t:7},
+      {f:698,t:9},{f:659,t:11},{f:587,t:13},{f:659,t:15},
     ];
-    counter.forEach(({f,t}) => note(ctx, f, now + t*B, B*0.5, 0.08, "sawtooth"));
+    counter.forEach(({f,t}) => note(ctx, f, now + t*B, B*0.42, 0.07, "sine"));
 
-    // ── Driving bass ──
     const bass = [
-      {f:110,t:0},{f:110,t:0.5},{f:110,t:1},{f:98,t:1.5},
-      {f:110,t:2},{f:110,t:2.5},{f:123,t:3},{f:110,t:3.5},
-      {f:110,t:4},{f:110,t:4.5},{f:110,t:5},{f:98,t:5.5},
-      {f:110,t:6},{f:123,t:6.5},{f:110,t:7},{f:123,t:7.5},
-      {f:146,t:8},{f:146,t:8.5},{f:131,t:9},{f:131,t:9.5},
-      {f:123,t:10},{f:123,t:10.5},{f:110,t:11},{f:110,t:11.5},
-      {f:110,t:12},{f:110,t:12.5},{f:123,t:13},{f:123,t:13.5},
-      {f:131,t:14},{f:146,t:14.5},{f:165,t:15},{f:146,t:15.5},
+      {f:130,t:0},{f:130,t:2},{f:98,t:4},{f:98,t:6},
+      {f:146,t:8},{f:146,t:10},{f:98,t:12},{f:130,t:14},
     ];
-    bass.forEach(({f,t}) => note(ctx, f, now + t*B, B*0.8, 0.12, "sawtooth"));
+    bass.forEach(({f,t}) => note(ctx, f, now + t*B, B*1.0, 0.06, "sine"));
 
-    // ── Energetic drums: kick on every beat + fast hihats ──
     for (let i = 0; i < 16; i++) {
-      kick(ctx, now + i*B);                               // kick every beat
-      hihat(ctx, now + i*B, 0.05);                       // hihat on beat
-      hihat(ctx, now + (i + 0.5)*B, 0.07);               // hihat on offbeat
-      if (i % 4 === 2) hihat(ctx, now + (i + 0.25)*B, 0.04); // extra 16th
+      if (i % 4 === 0) kick(ctx, now + i*B, 0.18);
+      if (i % 2 !== 0) hihat(ctx, now + i*B, 0.025);
+      if (i % 4 === 2) hihat(ctx, now + (i + 0.25)*B, 0.02);
     }
-
-    // ── Accent stabs on strong beats ──
-    [0, 4, 8, 12].forEach(t => {
-      [220, 277, 330].forEach(f => note(ctx, f, now + t*B, B*0.15, 0.08, "square"));
-    });
 
     const loopDur = 16 * B * 1000;
     _bgLoopTimeout = setTimeout(playGameLoop, loopDur - 50);
@@ -329,17 +297,26 @@ function startBgMusic(type = "menu") {
   stopBgMusic();
   if (!_bgOn) return;
   _currentMusicType = type;
-  if (type === "game") playGameLoop();
-  else playMenuLoop();
+  sendYoutubeCommand("playVideo");
+  sendYoutubeCommand("setVolume", [25]);
+}
+
+function YoutubeBackgroundMusic(){
+  return <iframe
+    ref={frame=>{_youtubeFrame=frame;}}
+    title="Background music"
+    src={`https://www.youtube.com/embed/${YOUTUBE_TRACK_ID}?enablejsapi=1&autoplay=1&loop=1&playlist=${YOUTUBE_TRACK_ID}&controls=0&rel=0&playsinline=1&origin=${encodeURIComponent(window.location.origin)}`}
+    allow="autoplay"
+    style={{position:"fixed",width:1,height:1,opacity:0,pointerEvents:"none",border:0,zIndex:-1}}
+    onLoad={()=>{if(_bgOn){sendYoutubeCommand("setVolume", [25]);sendYoutubeCommand("playVideo");}}}
+  />;
 }
 
 // ─── GLOBAL STYLES ─────────────────────────────────────────────────────────
 function GlobalStyles(){return(
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Lilita+One&family=Baloo+2:wght@600;700;800;900&display=swap');
-    *{box-sizing:border-box;}
-    html{font-size:20px;}
-    body{margin:0;background:#C9B8F0;font-size:20px;}
+    *{box-sizing:border-box;}body{margin:0;background:#050010;}
     @keyframes bounce-in{0%{transform:scale(0.1) rotate(-20deg);opacity:0}55%{transform:scale(1.18) rotate(6deg);opacity:1}75%{transform:scale(0.95)}100%{transform:scale(1) rotate(0)}}
     @keyframes float{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-20px) rotate(3deg)}}
     @keyframes wiggle{0%,100%{transform:rotate(-6deg) scale(1)}50%{transform:rotate(6deg) scale(1.1)}}
@@ -530,24 +507,22 @@ function CountdownTimer({seconds,onDone,speed}){
 // ─── SPEED SELECTOR ────────────────────────────────────────────────────────
 function SpeedSelector({speed,onSelect}){
   return(
-    <div style={{display:"flex",gap:10,justifyContent:"center",margin:"6px 0 10px"}}>
+    <div style={{display:"flex",gap:14,justifyContent:"center",margin:"10px 0 16px"}}>
       {[
         {id:"slow",icon:"🐢",label:"SLOW",sub:"5 sec",g:"linear-gradient(135deg,#006400,#00CC44)",glow:"#00FF88"},
         {id:"fast",icon:"⚡",label:"FAST",sub:"1 sec",g:"linear-gradient(135deg,#8B0000,#FF2222)",glow:"#FF4444"},
       ].map(s=>(
         <button key={s.id} className="b-btn" onClick={()=>{playTick();onSelect(s.id);}} style={{
-          background:speed===s.id?s.g:"rgba(255,255,255,0.6)",
-          border:`3px solid ${speed===s.id?s.glow:"rgba(0,0,0,0.1)"}`,
-          borderRadius:16,padding:"8px 18px",
-          color:speed===s.id?"#fff":"#555",
-          fontFamily:"'Baloo 2',cursive",cursor:"pointer",
-          minWidth:100,textAlign:"center",
-          boxShadow:speed===s.id?`0 0 20px ${s.glow}88`:"0 2px 8px rgba(0,0,0,0.1)",
-          transform:speed===s.id?"scale(1.05)":"scale(1)",transition:"all 0.2s",
+          background:speed===s.id?s.g:"rgba(255,255,255,0.05)",
+          border:`4px solid ${speed===s.id?s.glow:"rgba(255,255,255,0.15)"}`,
+          borderRadius:20,padding:"14px 22px",color:"#fff",fontFamily:"'Baloo 2',cursive",cursor:"pointer",
+          minWidth:120,textAlign:"center",
+          boxShadow:speed===s.id?`0 0 28px ${s.glow}88,0 8px 24px rgba(0,0,0,0.4)`:"0 4px 14px rgba(0,0,0,0.3)",
+          transform:speed===s.id?"scale(1.1)":"scale(1)",transition:"all 0.2s",
         }}>
-          <div style={{fontSize:"1.6rem"}}>{s.icon}</div>
-          <div style={{fontWeight:800,fontSize:"0.85rem"}}>{s.label}</div>
-          <div style={{fontSize:"0.65rem",opacity:0.85}}>{s.sub}</div>
+          <div style={{fontSize:"2.2rem"}}>{s.icon}</div>
+          <div style={{fontWeight:800,fontSize:"1rem"}}>{s.label}</div>
+          <div style={{fontSize:"0.72rem",opacity:0.85}}>{s.sub}</div>
         </button>
       ))}
     </div>
@@ -612,7 +587,7 @@ function SplashScreen({onDone}){
 }
 
 // ─── HOME SCREEN ───────────────────────────────────────────────────────────
-function HomeScreen({students,currentStudent,onLogin,onSwitchAccount,onStart,onTeacher,backendOk,onTeacherLogin}){
+function HomeScreen({students,currentStudent,onLogin,onSwitchAccount,onStart,onTeacher}){
   const [step,setStep]=useState("login");
   const [nameInput,setNameInput]=useState("");
   const [pin,setPin]=useState("");
@@ -727,7 +702,7 @@ function CategoryPicker({student,onPick,onHome}){
         <div style={S.catGrid}>
           {CATEGORIES.map((cat,i)=>(
             <button key={cat.id} className="b-btn b-bounce" style={{...S.catCard,background:`linear-gradient(160deg,${cat.color1},${cat.color2})`,boxShadow:`0 10px 40px ${cat.glow}66,0 4px 14px rgba(0,0,0,0.5)`,border:`4px solid ${cat.glow}88`,transform:pressed===cat.id?"scale(0.88)":"scale(1)",animationDelay:`${i*0.1}s`}} onClick={()=>handlePick(cat)}>
-              <div className="b-float" style={{fontSize:"3rem",animationDelay:`${i*0.3}s`,filter:"drop-shadow(0 0 10px rgba(255,255,255,0.5))"}}>{cat.mascot}</div>
+              <div className="b-float" style={{fontSize:"3rem",animationDelay:`${i*0.3}s`,filter:"drop-shadow(0 0 6px rgba(128,0,0,0.4))"}}>{cat.mascot}</div>
               <div style={{fontSize:"2.5rem"}}>{cat.emoji}</div>
               <div style={{fontWeight:800,fontSize:"1.1rem",color:"#fff",textShadow:"0 2px 8px rgba(0,0,0,0.6)",fontFamily:"'Baloo 2',cursive"}}>{cat.label}</div>
             </button>
@@ -773,7 +748,7 @@ function ModuleShell({title,onBack,speed,onSpeedChange,navRow,children}){
     <div style={S.page}><GlobalStyles/><BgSpace/><MusicBtn type="game"/>
       <div style={{position:"relative",zIndex:1}}>
         <button className="b-btn" style={S.backBtn} onClick={()=>{playTick();stopBgMusic();startBgMusic("menu");onBack();}}>← Back</button>
-        <h2 style={{...S.title,fontSize:"1.4rem",textAlign:"center",margin:"2px 0 4px"}}>{title}</h2>
+        <h2 style={{...S.title,fontSize:"1.7rem",textAlign:"center",margin:"4px 0 8px"}}>{title}</h2>
         <SpeedSelector speed={speed} onSelect={onSpeedChange}/>
         {children}
         {navRow}
@@ -782,184 +757,7 @@ function ModuleShell({title,onBack,speed,onSpeedChange,navRow,children}){
   );
 }
 
-// ─── KID CHARACTER SVG COMPONENTS ────────────────────────────────────────────
-// Style: shape has its OWN face (eyes+smile on the shape body)
-// Kid character peeks from BEHIND the shape (head + arms showing around edges)
-
-const SHAPE_COLS={Heart:"#FF6B9D",Diamond:"#5BC8FF",Circle:"#C97DD4",Rectangle:"#52B788",Square:"#5BA4E6",Star:"#FFD166",Oval:"#9B89C4",Crescent:"#B39DDB",Flower:"#FF80AB"};
-const LETTER_BG=["#FF6B6B","#FF9F43","#FECA57","#48DBFB","#FF9FF3","#54A0FF","#5F27CD","#00D2D3","#1DD1A1","#F368E0","#EE5A24","#009432","#0652DD","#9980FA","#ED4C67","#B53471","#006266","#1289A7","#C4E538","#FDA7DF","#D980FA","#12CBC4","#FFC312","#C4E538","#7158e2","#3d3d3d"];
-const NUM_BG=["#FF6B6B","#FF9F43","#FECA57","#48DBFB","#FF9FF3","#54A0FF","#5F27CD","#00D2D3","#1DD1A1","#F368E0"];
-
-// Face drawn ON the shape itself
-function ShapeFace({cx,cy,r,dark=false}){
-  const tc=dark?"rgba(0,0,0,0.7)":"#3d1a0a";
-  return(<>
-    {/* white eyes */}
-    <ellipse cx={cx-r*0.28} cy={cy-r*0.08} rx={r*0.16} ry={r*0.18} fill="#fff"/>
-    <ellipse cx={cx+r*0.28} cy={cy-r*0.08} rx={r*0.16} ry={r*0.18} fill="#fff"/>
-    {/* pupils */}
-    <circle cx={cx-r*0.28} cy={cy-r*0.06} r={r*0.09} fill={tc}/>
-    <circle cx={cx+r*0.28} cy={cy-r*0.06} r={r*0.09} fill={tc}/>
-    {/* eye shine */}
-    <circle cx={cx-r*0.22} cy={cy-r*0.13} r={r*0.04} fill="#fff"/>
-    <circle cx={cx+r*0.34} cy={cy-r*0.13} r={r*0.04} fill="#fff"/>
-    {/* rosy cheeks */}
-    <ellipse cx={cx-r*0.44} cy={cy+r*0.14} rx={r*0.15} ry={r*0.09} fill="rgba(255,120,120,0.4)"/>
-    <ellipse cx={cx+r*0.44} cy={cy+r*0.14} rx={r*0.15} ry={r*0.09} fill="rgba(255,120,120,0.4)"/>
-    {/* big smile with teeth */}
-    <path d={`M${cx-r*0.26} ${cy+r*0.2} Q${cx} ${cy+r*0.44} ${cx+r*0.26} ${cy+r*0.2}`} fill="none" stroke={tc} strokeWidth={r*0.07} strokeLinecap="round"/>
-    <ellipse cx={cx} cy={cy+r*0.3} rx={r*0.18} ry={r*0.08} fill="#fff" opacity={0.7}/>
-  </>);
-}
-
-// Kid head that peeks behind the shape
-function KidHead({cx,cy,r,pigtails=false}){
-  return(<>
-    {/* hair back */}
-    <ellipse cx={cx} cy={cy-r*0.1} rx={r*1.08} ry={r*1.05} fill="#6B3A1F"/>
-    {pigtails&&<>
-      <circle cx={cx-r*1.15} cy={cy-r*0.4} r={r*0.32} fill="#6B3A1F"/>
-      <circle cx={cx+r*1.15} cy={cy-r*0.4} r={r*0.32} fill="#6B3A1F"/>
-    </>}
-    {/* face */}
-    <circle cx={cx} cy={cy} r={r} fill="#FFCB99" stroke="#e8a87c" strokeWidth={r*0.06}/>
-    {/* hair front */}
-    <ellipse cx={cx} cy={cy-r*0.72} rx={r*0.9} ry={r*0.5} fill="#6B3A1F"/>
-    {/* eyes */}
-    <ellipse cx={cx-r*0.32} cy={cy-r*0.1} rx={r*0.12} ry={r*0.14} fill="#3d1a0a"/>
-    <ellipse cx={cx+r*0.32} cy={cy-r*0.1} rx={r*0.12} ry={r*0.14} fill="#3d1a0a"/>
-    <circle cx={cx-r*0.26} cy={cy-r*0.16} r={r*0.05} fill="#fff"/>
-    <circle cx={cx+r*0.38} cy={cy-r*0.16} r={r*0.05} fill="#fff"/>
-    {/* cheeks */}
-    <ellipse cx={cx-r*0.5} cy={cy+r*0.15} rx={r*0.16} ry={r*0.1} fill="rgba(255,140,140,0.5)"/>
-    <ellipse cx={cx+r*0.5} cy={cy+r*0.15} rx={r*0.16} ry={r*0.1} fill="rgba(255,140,140,0.5)"/>
-    {/* smile */}
-    <path d={`M${cx-r*0.24} ${cy+r*0.22} Q${cx} ${cy+r*0.42} ${cx+r*0.24} ${cy+r*0.22}`} fill="none" stroke="#3d1a0a" strokeWidth={r*0.07} strokeLinecap="round"/>
-    {/* teeth */}
-    <ellipse cx={cx} cy={cy+r*0.32} rx={r*0.16} ry={r*0.07} fill="#fff" opacity={0.8}/>
-  </>);
-}
-
-function KidShape({name,color,size=190}){
-  const c=color||SHAPE_COLS[name]||"#C97DD4";
-  const s=size;
-  const cx=s/2;
-  // Shape sits in lower portion; kid head peeks from top-behind
-  const shapecy=s*0.62;  // shape center Y
-  const sh=s*0.38;       // shape half-size
-  const kidHeadCY=s*0.22; // kid head center Y (above shape)
-  const kidR=s*0.14;      // kid head radius
-
-  // Shade color for shape
-  const shade=(hex)=>{
-    const n=parseInt(hex.slice(1),16);
-    const r=Math.max(0,(n>>16)-30);const g=Math.max(0,((n>>8)&0xff)-30);const b=Math.max(0,(n&0xff)-30);
-    return`#${r.toString(16).padStart(2,"0")}${g.toString(16).padStart(2,"0")}${b.toString(16).padStart(2,"0")}`;
-  };
-
-  const shapeBody={
-    Heart:   <path d={`M${cx} ${shapecy+sh*0.8} C${cx-sh*1.3} ${shapecy-sh*0.1} ${cx-sh*1.2} ${shapecy-sh*1.1} ${cx} ${shapecy-sh*0.3} C${cx+sh*1.2} ${shapecy-sh*1.1} ${cx+sh*1.3} ${shapecy-sh*0.1} ${cx} ${shapecy+sh*0.8}`} fill={c}/>,
-    Diamond: <polygon points={`${cx},${shapecy-sh*1.1} ${cx+sh*0.9},${shapecy} ${cx},${shapecy+sh*1.1} ${cx-sh*0.9},${shapecy}`} fill={c}/>,
-    Circle:  <circle cx={cx} cy={shapecy} r={sh*1.05} fill={c}/>,
-    Rectangle:<rect x={cx-sh*1.3} y={shapecy-sh*0.75} width={sh*2.6} height={sh*1.5} rx={sh*0.12} fill={c}/>,
-    Square:  <rect x={cx-sh*1.0} y={shapecy-sh*1.0} width={sh*2.0} height={sh*2.0} rx={sh*0.14} fill={c}/>,
-    Star:    <polygon points={Array.from({length:10},(_,i)=>{const a=Math.PI/5*i-Math.PI/2;const r2=i%2?sh*0.45:sh*1.05;return`${cx+r2*Math.cos(a)},${shapecy+r2*Math.sin(a)}`;}).join(" ")} fill={c}/>,
-    Oval:    <ellipse cx={cx} cy={shapecy} rx={sh*0.82} ry={sh*1.05} fill={c}/>,
-    Crescent:<><circle cx={cx} cy={shapecy} r={sh*1.0} fill={c}/><circle cx={cx+sh*0.44} cy={shapecy-sh*0.2} r={sh*0.82} fill="#E8D5F5"/></>,
-    Flower:  <>{Array.from({length:6},(_,i)=>{const a=Math.PI/3*i;return<ellipse key={i} cx={cx+sh*0.62*Math.cos(a)} cy={shapecy+sh*0.62*Math.sin(a)} rx={sh*0.44} ry={sh*0.62} fill={c} transform={`rotate(${i*60},${cx+sh*0.62*Math.cos(a)},${shapecy+sh*0.62*Math.sin(a)})`}/>})}<circle cx={cx} cy={shapecy} r={sh*0.36} fill="#FFD93D"/></>,
-  };
-
-  // Face position on shape (center of shape body)
-  const faceCY = name==="Heart"?shapecy+sh*0.1 : name==="Star"?shapecy+sh*0.25 : shapecy;
-  const faceR  = name==="Rectangle"?sh*0.48 : name==="Diamond"?sh*0.38 : sh*0.45;
-
-  return(
-    <svg width={s} height={s*0.92} viewBox={`0 0 ${s} ${s*0.92}`} style={{overflow:"visible",display:"block"}}>
-      {/* shadow */}
-      <ellipse cx={cx} cy={s*0.9} rx={sh*0.9} ry={sh*0.12} fill="rgba(0,0,0,0.12)"/>
-      {/* kid body/torso behind shape */}
-      <ellipse cx={cx} cy={s*0.78} rx={kidR*1.4} ry={kidR*0.9} fill="#FF9F43"/>
-      {/* kid arms behind shape */}
-      <ellipse cx={cx-sh*0.95} cy={shapecy+sh*0.15} rx={sh*0.28} ry={sh*0.16} fill="#FFCB99" transform={`rotate(-25,${cx-sh*0.95},${shapecy+sh*0.15})`}/>
-      <ellipse cx={cx+sh*0.95} cy={shapecy+sh*0.15} rx={sh*0.28} ry={sh*0.16} fill="#FFCB99" transform={`rotate(25,${cx+sh*0.95},${shapecy+sh*0.15})`}/>
-      {/* kid head BEHIND shape */}
-      <KidHead cx={cx} cy={kidHeadCY} r={kidR} pigtails={true}/>
-      {/* shape body ON TOP */}
-      {shapeBody[name]||shapeBody.Circle}
-      {/* shape face ON the shape */}
-      <ShapeFace cx={cx} cy={faceCY} r={faceR} dark={name==="Star"||name==="Flower"}/>
-    </svg>
-  );
-}
-
-function KidLetter({letter,size=180}){
-  const idx="ABCDEFGHIJKLMNOPQRSTUVWXYZ".indexOf(letter);
-  const c=LETTER_BG[idx]||"#FF6B6B";
-  const s=size, cx=s/2;
-  const shapecy=s*0.6, sh=s*0.35;
-  const kidR=s*0.135;
-  return(
-    <svg width={s} height={s*0.92} viewBox={`0 0 ${s} ${s*0.92}`} style={{overflow:"visible",display:"block"}}>
-      <ellipse cx={cx} cy={s*0.9} rx={sh*0.9} ry={sh*0.11} fill="rgba(0,0,0,0.12)"/>
-      {/* kid torso */}
-      <ellipse cx={cx} cy={s*0.78} rx={kidR*1.4} ry={kidR*0.9} fill="#5BA4E6"/>
-      {/* arms behind */}
-      <ellipse cx={cx-sh*0.95} cy={shapecy+sh*0.1} rx={sh*0.28} ry={sh*0.15} fill="#FFCB99" transform={`rotate(-22,${cx-sh*0.95},${shapecy+sh*0.1})`}/>
-      <ellipse cx={cx+sh*0.95} cy={shapecy+sh*0.1} rx={sh*0.28} ry={sh*0.15} fill="#FFCB99" transform={`rotate(22,${cx+sh*0.95},${shapecy+sh*0.1})`}/>
-      {/* kid head behind */}
-      <KidHead cx={cx} cy={s*0.22} r={kidR} pigtails={false}/>
-      {/* circle badge */}
-      <circle cx={cx} cy={shapecy} r={sh*1.05} fill={c}/>
-      {/* letter on badge */}
-      <text x={cx} y={shapecy+sh*0.42} textAnchor="middle" fontFamily="'Lilita One',cursive" fontSize={sh*1.15} fill="#fff" opacity={0.95}>{letter}</text>
-      {/* face on badge */}
-      <ShapeFace cx={cx} cy={shapecy} r={sh*0.46}/>
-    </svg>
-  );
-}
-
-function KidNumber({num,size=180}){
-  const c=NUM_BG[num]||"#54A0FF";
-  const s=size, cx=s/2;
-  const shapecy=s*0.6, sh=s*0.34;
-  const kidR=s*0.135;
-  return(
-    <svg width={s} height={s*0.92} viewBox={`0 0 ${s} ${s*0.92}`} style={{overflow:"visible",display:"block"}}>
-      <ellipse cx={cx} cy={s*0.9} rx={sh*0.9} ry={sh*0.11} fill="rgba(0,0,0,0.12)"/>
-      <ellipse cx={cx} cy={s*0.78} rx={kidR*1.4} ry={kidR*0.9} fill="#FF6B6B"/>
-      <ellipse cx={cx-sh*0.95} cy={shapecy+sh*0.1} rx={sh*0.28} ry={sh*0.15} fill="#FFCB99" transform={`rotate(-22,${cx-sh*0.95},${shapecy+sh*0.1})`}/>
-      <ellipse cx={cx+sh*0.95} cy={shapecy+sh*0.1} rx={sh*0.28} ry={sh*0.15} fill="#FFCB99" transform={`rotate(22,${cx+sh*0.95},${shapecy+sh*0.1})`}/>
-      <KidHead cx={cx} cy={s*0.22} r={kidR} pigtails={false}/>
-      {/* rounded square badge */}
-      <rect x={cx-sh} y={shapecy-sh} width={sh*2} height={sh*2} rx={sh*0.28} fill={c}/>
-      <text x={cx} y={shapecy+sh*0.44} textAnchor="middle" fontFamily="'Lilita One',cursive" fontSize={sh*1.18} fill="#fff" opacity={0.95}>{num}</text>
-      <ShapeFace cx={cx} cy={shapecy} r={sh*0.44}/>
-    </svg>
-  );
-}
-
-function KidColor({hex,size=180}){
-  const s=size, cx=s/2;
-  const shapecy=s*0.6, sh=s*0.35;
-  const kidR=s*0.135;
-  const isDark=hex==="#222222";
-  return(
-    <svg width={s} height={s*0.92} viewBox={`0 0 ${s} ${s*0.92}`} style={{overflow:"visible",display:"block"}}>
-      <ellipse cx={cx} cy={s*0.9} rx={sh*0.9} ry={sh*0.11} fill="rgba(0,0,0,0.12)"/>
-      <ellipse cx={cx} cy={s*0.78} rx={kidR*1.4} ry={kidR*0.9} fill="#52B788"/>
-      <ellipse cx={cx-sh*0.95} cy={shapecy+sh*0.1} rx={sh*0.28} ry={sh*0.15} fill="#FFCB99" transform={`rotate(-22,${cx-sh*0.95},${shapecy+sh*0.1})`}/>
-      <ellipse cx={cx+sh*0.95} cy={shapecy+sh*0.1} rx={sh*0.28} ry={sh*0.15} fill="#FFCB99" transform={`rotate(22,${cx+sh*0.95},${shapecy+sh*0.1})`}/>
-      <KidHead cx={cx} cy={s*0.22} r={kidR} pigtails={true}/>
-      <circle cx={cx} cy={shapecy} r={sh*1.05} fill={hex} stroke={isDark?"#555":"rgba(0,0,0,0.08)"} strokeWidth={3}/>
-      {!isDark&&<ellipse cx={cx-sh*0.35} cy={shapecy-sh*0.45} rx={sh*0.28} ry={sh*0.34} fill="rgba(255,255,255,0.25)" transform={`rotate(-20,${cx-sh*0.35},${shapecy-sh*0.45})`}/>}
-      <ShapeFace cx={cx} cy={shapecy} r={sh*0.46} dark={isDark}/>
-    </svg>
-  );
-}
-
-
-
-
+// ─── ALPHABET MODULE ───────────────────────────────────────────────────────
 function AlphabetModule({onBack}){
   const [idx,setIdx]=useState(0);
   const [speed,setSpeed]=useState("slow");
@@ -974,16 +772,14 @@ function AlphabetModule({onBack}){
           <button className="b-btn" style={S.navBtn} onClick={()=>{playFlip();setIdx(i=>Math.min(25,i+1));}} disabled={idx===25}>Next ▶</button>
         </div>
       }>
-      <div key={letter+speed} className="b-spin" style={{...S.moduleCard,background:"linear-gradient(160deg,#FF6B6B,#FFE66D)",border:"4px solid #fff",boxShadow:"0 8px 40px rgba(255,107,107,0.5)",padding:"18px 16px",marginBottom:8}}>
-        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:6,marginBottom:4}}>
-          <div style={{fontSize:"4rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#7B2FBE",filter:"drop-shadow(2px 2px 0 #fff)"}}>{letter}</div>
-          <div style={{width:3,height:50,background:"linear-gradient(#7B2FBE,#FF6B6B)",borderRadius:4,margin:"0 4px"}}/>
-          <div style={{fontSize:"4rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#FF6B6B",filter:"drop-shadow(2px 2px 0 #fff)"}}>{letter.toLowerCase()}</div>
+      <div key={letter+speed} className="b-spin" style={{...S.moduleCard,background:"linear-gradient(160deg,#FF6B6B,#FFE66D)",border:"4px solid #fff",boxShadow:"0 8px 40px rgba(255,107,107,0.5)"}}>
+        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,marginBottom:10}}>
+          <div style={{fontSize:"8rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#7B2FBE",filter:"drop-shadow(2px 2px 0px rgba(128,0,0,0.8)) drop-shadow(-2px -2px 0px rgba(0,0,0,0.2))"}}>{letter}</div>
+          <div style={{width:5,height:100,background:"linear-gradient(#7B2FBE,#FF6B6B,#FFE66D)",borderRadius:4,margin:"0 6px"}}/>
+          <div style={{fontSize:"8rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#FF6B6B",filter:"drop-shadow(2px 2px 0px rgba(128,0,0,0.8)) drop-shadow(-2px -2px 0px rgba(0,0,0,0.2))"}}>{letter.toLowerCase()}</div>
         </div>
-        <div style={{display:"flex",justifyContent:"center"}} className="b-bounce">
-          <KidLetter letter={letter} size={150}/>
-        </div>
-        <button className="b-btn" style={{...S.soundBtn,background:"linear-gradient(135deg,#7B2FBE,#FF6B6B)",color:"#fff",padding:"10px 24px",fontSize:"0.9rem",marginTop:4}} onClick={()=>{duckMusic();speak(letter,speed==="slow"?0.1:0.9);setTimeout(unduckMusic,speed==="slow"?6000:2000);}}>🔊 Hear it!</button>
+        <div className="b-wiggle" style={{fontSize:"4rem",margin:"6px 0"}}>{EMOJIS[letter]}</div>
+        <button className="b-btn" style={{...S.soundBtn,background:"linear-gradient(135deg,#7B2FBE,#FF6B6B)",color:"#fff"}} onClick={()=>speak(letter,speed==="slow"?0.1:0.9)}>🔊 Hear it!</button>
       </div>
     </ModuleShell>
   );
@@ -1000,11 +796,10 @@ function NumberModule({onBack}){
   return(
     <ModuleShell title="🔢 Numbers" onBack={onBack} speed={speed} onSpeedChange={setSpeed}
       navRow={<div style={S.navRow}><button className="b-btn" style={S.navBtn} onClick={()=>{playFlip();setIdx(i=>Math.max(0,i-1));}} disabled={idx===0}>◀ Prev</button><div style={S.navPill}>{idx+1} / 10</div><button className="b-btn" style={S.navBtn} onClick={()=>{playFlip();setIdx(i=>Math.min(9,i+1));}} disabled={idx===9}>Next ▶</button></div>}>
-      <div key={num+speed} className="b-spin" style={{...S.moduleCard,background:"linear-gradient(160deg,#4FC3F7,#B2EBF2)",border:"4px solid #fff",boxShadow:"0 8px 40px rgba(79,195,247,0.5)",padding:"18px 16px",marginBottom:8}}>
-        <div style={{display:"flex",justifyContent:"center"}} className="b-bounce">
-          <KidNumber num={num} size={150}/>
-        </div>
-        <button className="b-btn" style={{...S.soundBtn,background:"linear-gradient(135deg,#0077B6,#00B4D8)",padding:"10px 24px",fontSize:"0.9rem",marginTop:4}} onClick={()=>{duckMusic();speak(NUM_WORDS[num]||String(num),speed==="slow"?0.1:0.9);setTimeout(unduckMusic,speed==="slow"?6000:2000);}}>🔊 Hear it!</button>
+      <div key={num+speed} className="b-spin" style={{...S.moduleCard,background:"linear-gradient(160deg,#4FC3F7,#B2EBF2)",border:"4px solid #fff",boxShadow:"0 8px 40px rgba(79,195,247,0.5)"}}>
+        <img src={`/images/${num}.png`} alt={`Number ${num}`} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.8)) drop-shadow(0 4px 8px rgba(0,0,0,0.15))"}} />
+        <div className="b-wiggle" style={{fontSize:"3.5rem",margin:"6px 0"}}>{NUM_EMOJI[num]}</div>
+        <button className="b-btn" style={{...S.soundBtn,background:"linear-gradient(135deg,#0077B6,#00B4D8)"}} onClick={()=>speak(NUM_WORDS[num]||String(num),speed==="slow"?0.1:0.9)}>🔊 Hear it!</button>
       </div>
     </ModuleShell>
   );
@@ -1016,15 +811,16 @@ function ShapeModule({onBack}){
   const [speed,setSpeed]=useState("slow");
   const shape=SHAPES[idx];
   useEffect(()=>{playFlip();},[shape,speed]);
+  const total = SHAPES.length;
   return(
     <ModuleShell title="🔷 Shapes" onBack={onBack} speed={speed} onSpeedChange={setSpeed}
-      navRow={<div style={S.navRow}><button className="b-btn" style={S.navBtn} onClick={()=>{playFlip();setIdx(i=>Math.max(0,i-1));}} disabled={idx===0}>◀ Prev</button><div style={S.navPill}>{idx+1} / 10</div><button className="b-btn" style={S.navBtn} onClick={()=>{playFlip();setIdx(i=>Math.min(9,i+1));}} disabled={idx===9}>Next ▶</button></div>}>
-      <div key={shape.name+speed} className="b-spin" style={{...S.moduleCard,background:"linear-gradient(160deg,#FF5252,#FF1744)",border:"4px solid #fff",boxShadow:"0 8px 40px rgba(255,23,68,0.5)",padding:"18px 16px",marginBottom:8}}>
-        <p style={{fontWeight:900,fontSize:"1.3rem",color:"#fff",fontFamily:"'Lilita One',cursive",marginBottom:2,textShadow:"2px 2px 0 rgba(0,0,0,0.3)"}}>{shape.name}</p>
-        <div style={{display:"flex",justifyContent:"center"}} className="b-bounce">
-          <KidShape name={shape.name} color={shape.color} size={160}/>
+      navRow={<div style={S.navRow}><button className="b-btn" style={S.navBtn} onClick={()=>{playFlip();setIdx(i=>Math.max(0,i-1));}} disabled={idx===0}>◀ Prev</button><div style={S.navPill}>{idx+1} / {total}</div><button className="b-btn" style={S.navBtn} onClick={()=>{playFlip();setIdx(i=>Math.min(total-1,i+1));}} disabled={idx===total-1}>Next ▶</button></div>}>
+      <div key={shape.name+speed} className="b-spin" style={{...S.moduleCard,background:`linear-gradient(160deg, ${shape.color}, #fff2a8)`,border:"4px solid #fff",boxShadow:`0 8px 40px ${shape.color}88`}}>
+        <p style={{fontWeight:900,fontSize:"1.6rem",color:"#fff",fontFamily:"'Lilita One',cursive",marginBottom:8,textShadow:"2px 2px 0 rgba(0,0,0,0.25)"}}>{shape.name}</p>
+        <div style={{display:"flex",justifyContent:"center",alignItems:"center",minHeight:240}}>
+          <img src={shape.image} alt={shape.name} style={{maxWidth:"100%",maxHeight:260,width:"auto",height:"auto",display:"block",objectFit:"contain",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.45)) drop-shadow(0 0 18px rgba(0,0,0,0.12))"}} />
         </div>
-        <button className="b-btn" style={{...S.soundBtn,background:"linear-gradient(135deg,#B71C1C,#FF5252)",marginTop:4,padding:"10px 24px",fontSize:"0.9rem"}} onClick={()=>{duckMusic();speak(shape.name,speed==="slow"?0.1:0.9);setTimeout(unduckMusic,speed==="slow"?6000:2000);}}>🔊 Hear it!</button>
+        <button className="b-btn" style={{...S.soundBtn,background:`linear-gradient(135deg, ${shape.color}, #ff8a00)`,marginTop:16}} onClick={()=>speak(shape.name,speed==="slow"?0.1:0.9)}>🔊 Hear it!</button>
       </div>
     </ModuleShell>
   );
@@ -1039,12 +835,10 @@ function ColorModule({onBack}){
   return(
     <ModuleShell title="🎨 Colors" onBack={onBack} speed={speed} onSpeedChange={setSpeed}
       navRow={<div style={S.navRow}><button className="b-btn" style={S.navBtn} onClick={()=>{playFlip();setIdx(i=>Math.max(0,i-1));}} disabled={idx===0}>◀ Prev</button><div style={S.navPill}>{idx+1} / 10</div><button className="b-btn" style={S.navBtn} onClick={()=>{playFlip();setIdx(i=>Math.min(9,i+1));}} disabled={idx===9}>Next ▶</button></div>}>
-      <div key={color.name+speed} className="b-spin" style={{...S.moduleCard,background:"#FFFFFF",border:`6px solid ${color.hex}`,boxShadow:`0 8px 40px ${color.hex}88`,padding:"18px 16px",marginBottom:8}}>
-        <p style={{fontWeight:900,fontSize:"1.6rem",color:color.hex,fontFamily:"'Lilita One',cursive",marginBottom:4,textShadow:"1px 1px 0 rgba(0,0,0,0.1)"}}>{color.name}</p>
-        <div style={{display:"flex",justifyContent:"center"}} className="b-bounce">
-          <KidColor hex={color.hex} name={color.name} size={150}/>
-        </div>
-        <button className="b-btn" style={{...S.soundBtn,background:color.hex,color:"#fff",padding:"10px 24px",fontSize:"0.9rem",marginTop:4}} onClick={()=>{duckMusic();speak(color.name,speed==="slow"?0.1:0.9);setTimeout(unduckMusic,speed==="slow"?6000:2000);}}>🔊 Hear it!</button>
+      <div key={color.name+speed} className="b-spin" style={{...S.moduleCard,background:"#FFFFFF",border:`6px solid ${color.hex}`,boxShadow:`0 8px 40px ${color.hex}88`}}>
+        <p style={{fontWeight:900,fontSize:"2rem",color:color.hex,fontFamily:"'Lilita One',cursive",marginBottom:8,textShadow:"1px 1px 0 rgba(0,0,0,0.1)"}}>{color.name}</p>
+        <div className="b-float" style={{width:180,height:180,borderRadius:"50%",background:color.hex,margin:"0 auto 16px",border:"8px solid white",boxShadow:`0 0 0 4px ${color.hex},0 12px 40px ${color.hex}88`}}/>
+        <button className="b-btn" style={{...S.soundBtn,background:color.hex,color:"#fff"}} onClick={()=>speak(color.name,speed==="slow"?0.1:0.9)}>🔊 Hear it!</button>
       </div>
     </ModuleShell>
   );
@@ -1071,7 +865,7 @@ function GameResult({score,total,emoji,title,onBack,student}){
 }
 
 // ─── MATCHING ACTIVITY ─────────────────────────────────────────────────────
-function MatchingActivity({category,speed,onEarn,onBack,student,onFinish}){
+function MatchingActivity({category,speed,onEarn,onBack,student}){
   const [questions,setQuestions]=useState([]);
   const [qIdx,setQIdx]=useState(0);
   const [selected,setSelected]=useState(null);
@@ -1080,7 +874,6 @@ function MatchingActivity({category,speed,onEarn,onBack,student,onFinish}){
   const [showConfetti,setShowConfetti]=useState(false);
   const [compliment,setCompliment]=useState("");
   const [timerKey,setTimerKey]=useState(0);
-  const [answers,setAnswers]=useState([]);  // track for backend
   const timeLimit=speed==="fast"?15:30;
 
   useEffect(()=>{ generate(); },[category]);
@@ -1089,10 +882,10 @@ function MatchingActivity({category,speed,onEarn,onBack,student,onFinish}){
     let pool=[];
     if(category.id==="alphabets") pool=ALPHABET.map(l=>({question:l,correct:l,distractors:shuffle(ALPHABET.filter(x=>x!==l)).slice(0,3),type:"letter"}));
     else if(category.id==="numbers") pool=NUMBERS.map(n=>({question:String(n),correct:String(n),distractors:shuffle(NUMBERS.filter(x=>x!==n).map(String)).slice(0,3),type:"number"}));
-    else if(category.id==="shapes") pool=SHAPES.map(s=>({question:s.emoji,correct:s.name,distractors:shuffle(SHAPES.filter(x=>x.name!==s.name).map(x=>x.name)).slice(0,3),type:"shape"}));
+    else if(category.id==="shapes") pool=SHAPES.map(s=>({question:s.emoji,correct:s.name,distractors:shuffle(SHAPES.filter(x=>x.name!==s.name).map(x=>x.name)).slice(0,3),type:"shape",color:s.color}));
     else if(category.id==="colors") pool=COLORS.map(c=>({question:c.hex,correct:c.name,distractors:shuffle(COLORS.filter(x=>x.name!==c.name).map(x=>x.name)).slice(0,3),type:"color"}));
     const qs=shuffle(pool).slice(0,6).map(q=>({...q,options:shuffle([q.correct,...q.distractors])}));
-    setQuestions(qs);setQIdx(0);setSelected(null);setResult(null);setScore(0);setCompliment("");setTimerKey(k=>k+1);setAnswers([]);
+    setQuestions(qs);setQIdx(0);setSelected(null);setResult(null);setScore(0);setCompliment("");setTimerKey(k=>k+1);
   }
 
   function handleTimeout(){
@@ -1100,17 +893,16 @@ function MatchingActivity({category,speed,onEarn,onBack,student,onFinish}){
     const msg=randomOf(WRONG_COMPLIMENTS);
     setCompliment(msg);setResult("timeout");
     playTimeout();
-    setAnswers(a=>[...a,{question:q?.correct||"",heard:"timeout",correct:false}]);
     setTimeout(()=>speak(msg,0.9),300);
   }
 
   const q=questions[qIdx];
+  const shapeImage=q?.type==="shape"?SHAPES.find(s=>s.name===q.correct)?.image:null;
 
   function pick(opt){
     if(result)return;
     setSelected(opt);
     const ok=opt===q.correct;
-    setAnswers(a=>[...a,{question:q.correct,heard:opt,correct:ok}]);
     if(ok){
       const msg=randomOf(CORRECT_COMPLIMENTS);
       setCompliment(msg);setResult("correct");
@@ -1128,10 +920,7 @@ function MatchingActivity({category,speed,onEarn,onBack,student,onFinish}){
 
   function next(){
     playTick();
-    if(qIdx+1>=questions.length){
-      setResult("done");
-      if(onFinish) onFinish(score+(selected===q?.correct?0:0), questions.length, answers);
-    }
+    if(qIdx+1>=questions.length)setResult("done");
     else{setQIdx(i=>i+1);setSelected(null);setResult(null);setCompliment("");setTimerKey(k=>k+1);}
   }
 
@@ -1149,7 +938,8 @@ function MatchingActivity({category,speed,onEarn,onBack,student,onFinish}){
         <div key={qIdx} className="b-bounce" style={{...S.moduleCard,background:"linear-gradient(160deg,#FFF9C4,#FFEAA7)",border:"4px solid #FFD700",boxShadow:"0 8px 30px rgba(255,215,0,0.4)"}}>
           <p style={{fontWeight:800,color:"#E65100",marginBottom:10,fontFamily:"'Baloo 2',cursive",fontSize:"1rem"}}>What is this? 🤔</p>
           {q.type==="color"?(<div style={{width:120,height:120,borderRadius:"50%",background:q.question,margin:"0 auto 10px",border:"6px solid white",boxShadow:`0 0 30px ${q.question}88`}}/>)
-          :q.type==="shape"?(<div className="b-float" style={{fontSize:"8rem",filter:"drop-shadow(4px 4px 0 rgba(183,28,28,0.3))"}}>{q.question}</div>)
+          :q.type==="shape"&&shapeImage?(<img src={shapeImage} alt={q.correct} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 0 18px rgba(0,0,0,0.12))"}} />)
+          :q.type==="number"?(<img src={`/images/${q.question}.png`} alt={`Number ${q.question}`} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 4px 8px rgba(0,0,0,0.15))"}} />)
           :(<div style={{fontSize:"6rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#7B2FBE",filter:"drop-shadow(3px 3px 0 #FFD700)"}}>{q.question}</div>)}
           {compliment&&(
             <div className="b-compliment" style={{
@@ -1180,7 +970,7 @@ function MatchingActivity({category,speed,onEarn,onBack,student,onFinish}){
 }
 
 // ─── VOICE ACTIVITY ────────────────────────────────────────────────────────
-function VoiceActivity({category,speed,onEarn,onBack,student,onFinish}){
+function VoiceActivity({category,speed,onEarn,onBack,student}){
   const [items,setItems]               = useState([]);
   const [currentIdx,setIdx]            = useState(0);
   const [listening,setListening]       = useState(false);
@@ -1191,7 +981,6 @@ function VoiceActivity({category,speed,onEarn,onBack,student,onFinish}){
   const [timerKey,setTimerKey]         = useState(0);
   const [statusMsg,setStatusMsg]       = useState("");
   const [heardText,setHeardText]       = useState("");
-  const [sessionAnswers,setSessionAnswers] = useState([]); // track for backend
   const recogRef                       = useRef(null);
   const timeLimit = speed==="fast" ? 15 : 30;
 
@@ -1284,7 +1073,6 @@ function VoiceActivity({category,speed,onEarn,onBack,student,onFinish}){
   function processAnswer(heard){
     const ok = isMatch(heard, current.say);
     setHeardText(`I heard: "${heard}"`);
-    setSessionAnswers(a=>[...a,{question:current.say,heard,correct:ok}]);
     if(ok){
       const msg=randomOf(CORRECT_COMPLIMENTS);
       setCompliment(msg); setResult("correct");
@@ -1367,7 +1155,6 @@ function VoiceActivity({category,speed,onEarn,onBack,student,onFinish}){
         });
       return;
     }
-
     // ── Web Speech API (browser / Chrome on Android) ──
     tryWebSpeech();
   }
@@ -1456,7 +1243,7 @@ function VoiceActivity({category,speed,onEarn,onBack,student,onFinish}){
 
         {/* Question card */}
         <div key={currentIdx} className="b-bounce" style={{...S.moduleCard,
-          background: category.id==="shapes" ? "linear-gradient(160deg,#FF5252,#FF1744)"
+          background: category.id==="shapes" ? `linear-gradient(160deg, ${SHAPES.find(s=>s.name===current.label)?.color||"#FFB800"}, #fff2a8)`
             : category.id==="colors" ? "#FFFFFF"
             : category.id==="numbers" ? "linear-gradient(160deg,#4FC3F7,#B2EBF2)"
             : "linear-gradient(160deg,#FF6B6B,#FFE66D)",
@@ -1464,7 +1251,7 @@ function VoiceActivity({category,speed,onEarn,onBack,student,onFinish}){
             : category.id==="colors" ? `6px solid ${COLORS.find(c=>c.name===current.label)?.hex||"#ccc"}`
             : category.id==="numbers" ? "4px solid #fff"
             : "4px solid #fff",
-          boxShadow: category.id==="shapes" ? "0 8px 40px rgba(255,23,68,0.5)"
+          boxShadow: category.id==="shapes" ? `0 8px 40px ${SHAPES.find(s=>s.name===current.label)?.color||"#FFB800"}88`
             : "0 8px 30px rgba(206,147,216,0.4)",
         }}>
           <p style={{fontWeight:800,color:"#7B2FBE",marginBottom:8,
@@ -1482,11 +1269,13 @@ function VoiceActivity({category,speed,onEarn,onBack,student,onFinish}){
             </>
           ):category.id==="shapes"?(
             <>
-              <p style={{fontWeight:900,fontSize:"1.4rem",color:"#fff",fontFamily:"'Lilita One',cursive",marginBottom:2,textShadow:"2px 2px 0 rgba(0,0,0,0.3)"}}>{current.label}</p>
-              <div className="b-float" style={{fontSize:"7rem",filter:"drop-shadow(4px 4px 0 rgba(0,0,0,0.2))"}}>
-                {SHAPES.find(s=>s.name===current.label)?.emoji}
+              <p style={{fontWeight:900,fontSize:"1.4rem",color:"#fff",fontFamily:"'Lilita One',cursive",marginBottom:8,textShadow:"2px 2px 0 rgba(0,0,0,0.3)"}}>{current.label}</p>
+              <div style={{display:"flex",justifyContent:"center",alignItems:"center",minHeight:220}}>
+                <img src={SHAPES.find(s=>s.name===current.label)?.image || "/images/heart.jpeg"} alt={current.label} style={{maxWidth:"100%",maxHeight:220,width:"auto",height:"auto",objectFit:"contain",filter:"drop-shadow(0 10px 18px rgba(0,0,0,0.15))"}} />
               </div>
             </>
+          ):category.id==="numbers"?(
+            <img src={`/images/${current.label}.png`} alt={`Number ${current.label}`} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 4px 8px rgba(0,0,0,0.15))"}} />
           ):(
             <div style={{fontSize:"6rem",lineHeight:1,fontFamily:"'Lilita One',cursive",
               color:"#7B2FBE",filter:"drop-shadow(3px 3px 0 #CE93D8)"}}>
@@ -1602,59 +1391,26 @@ function ActivityPicker({category,student,onPick,onBack}){
   );
 }
 
-// ─── TEACHER DASHBOARD — backend connected ────────────────────────────────────
-function TeacherDashboard({students,onDeleteStudent,onBack,backendOk}){
-  const [pin,setPin]           = useState("");
-  const [unlocked,setUnlocked] = useState(false);
-  const [tab,setTab]           = useState("students");
-  const [overview,setOverview] = useState(null);
-  const [leaderboard,setLeaderboard] = useState([]);
-  const [catStats,setCatStats] = useState([]);
-  const [loading,setLoading]   = useState(false);
-  const sorted = [...students].sort((a,b)=>b.stars-a.stars);
-  const medals = ["🥇","🥈","🥉"];
-  const borders= ["#FFD700","#C0C0C0","#CD7F32"];
+// ─── TEACHER DASHBOARD — only teacher sees leaderboard ─────────────────────
+function TeacherDashboard({students,onDeleteStudent,onBack}){
+  const [pin,setPin]=useState("");
+  const [unlocked,setUnlocked]=useState(false);
+  const [tab,setTab]=useState("students");
+  const TEACHER_PIN="1234";
+  const sorted=[...students].sort((a,b)=>b.stars-a.stars);
+  const medals=["🥇","🥈","🥉"];
+  const borders=["#FFD700","#C0C0C0","#CD7F32"];
 
-  async function unlock(){
-    if(backendOk){
-      const res = await (await import('./api.js')).verifyPin(pin);
-      if(res?.ok){ playCorrect(); setUnlocked(true); fetchAnalytics(); }
-      else { playWrong(); }
-    } else {
-      if(pin==="1234"){ playCorrect(); setUnlocked(true); }
-      else { playWrong(); }
-    }
-  }
-
-  async function fetchAnalytics(){
-    if(!backendOk) return;
-    setLoading(true);
-    const [ov, lb, cs] = await Promise.all([
-      (await import('./api.js')).getOverview(),
-      (await import('./api.js')).getLeaderboard(10),
-      (await import('./api.js')).getCategoryStats(),
-    ]);
-    if(ov) setOverview(ov);
-    if(lb) setLeaderboard(lb);
-    if(cs) setCatStats(cs);
-    setLoading(false);
-  }
-
-  if(!unlocked) return(
+  if(!unlocked)return(
     <div style={S.page}><GlobalStyles/><BgSpace/><MusicBtn type="menu"/>
       <div style={{position:"relative",zIndex:1}}>
         <button className="b-btn" style={S.backBtn} onClick={()=>{playTick();onBack();}}>← Back</button>
         <div className="b-bounce" style={{textAlign:"center",maxWidth:340,margin:"40px auto"}}>
           <div style={{fontSize:"4rem"}}>🍎</div>
           <h2 style={{...S.title,fontSize:"1.9rem",margin:"8px 0"}}>Teacher's Corner</h2>
-          <p style={{color:"#7B2FBE",marginBottom:4,fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>
-            {backendOk?"🟢 Connected to server":"🔴 Offline mode"}
-          </p>
           <p style={{color:"#aaa",marginBottom:16,fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>Enter PIN to access dashboard</p>
-          <input style={S.input} type="password" placeholder="PIN (default: 1234)" value={pin}
-            onChange={e=>setPin(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&unlock()} maxLength={4}/>
-          <button className="b-btn" style={S.btnStart} onClick={unlock}>🔓 Unlock</button>
+          <input style={S.input} type="password" placeholder="PIN (default: 1234)" value={pin} onChange={e=>setPin(e.target.value)} maxLength={4}/>
+          <button className="b-btn" style={S.btnStart} onClick={()=>{if(pin===TEACHER_PIN){playCorrect();setUnlocked(true);}else{playWrong();alert("Wrong PIN!");}}}>🔓 Unlock</button>
         </div>
       </div>
     </div>
@@ -1664,121 +1420,60 @@ function TeacherDashboard({students,onDeleteStudent,onBack,backendOk}){
     <div style={S.page}><GlobalStyles/><BgSpace/><MusicBtn type="menu"/>
       <div style={{position:"relative",zIndex:1}}>
         <button className="b-btn" style={S.backBtn} onClick={()=>{playTick();onBack();}}>← Back</button>
-        <div style={{textAlign:"center",marginBottom:12}}>
-          <div style={{fontSize:"2.5rem"}}>🍎</div>
-          <h2 style={{...S.title,fontSize:"1.7rem",margin:"4px 0"}}>Teacher Dashboard</h2>
-          <p style={{color:"#7B2FBE",fontSize:"0.75rem",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>
-            {backendOk?"🟢 Server connected":"🔴 Offline — data saved locally"}
-          </p>
+        <div style={{textAlign:"center",marginBottom:16}}>
+          <div style={{fontSize:"3rem"}}>🍎</div>
+          <h2 style={{...S.title,fontSize:"1.9rem",margin:"4px 0"}}>Teacher Dashboard</h2>
+          <p style={{color:"#aaa",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>{students.length} students registered</p>
         </div>
-
-        {/* Overview stats — backend only */}
-        {overview&&(
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,maxWidth:480,margin:"0 auto 14px",padding:"0 4px"}}>
-            {[
-              {label:"Students",value:overview.totalStudents,icon:"👦",color:"#C44DFF"},
-              {label:"Games Played",value:overview.totalGames,icon:"🎮",color:"#FF6B9D"},
-              {label:"Total Stars",value:overview.totalStars,icon:"⭐",color:"#FFD700"},
-              {label:"Accuracy",value:overview.accuracy+"%",icon:"🎯",color:"#00C853"},
-            ].map(s=>(
-              <div key={s.label} style={{background:"rgba(255,255,255,0.85)",borderRadius:16,padding:"12px",textAlign:"center",boxShadow:"0 4px 16px rgba(196,77,255,0.15)",border:`2px solid ${s.color}44`}}>
-                <div style={{fontSize:"1.6rem"}}>{s.icon}</div>
-                <div style={{fontWeight:900,fontSize:"1.4rem",color:s.color,fontFamily:"'Lilita One',cursive"}}>{s.value}</div>
-                <div style={{fontSize:"0.7rem",color:"#666",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Tabs */}
-        <div style={{display:"flex",gap:8,maxWidth:480,margin:"0 auto 14px",padding:"0 4px",overflowX:"auto"}}>
-          {[
-            {id:"students",label:"👦 Students"},
-            {id:"leaderboard",label:"🏆 Leaderboard"},
-            ...(backendOk?[{id:"categories",label:"📊 Categories"}]:[]),
-          ].map(t=>(
+        {/* TABS */}
+        <div style={{display:"flex",gap:10,maxWidth:480,margin:"0 auto 16px",padding:"0 4px"}}>
+          {[{id:"students",label:"👨‍🎓 Students"},{id:"leaderboard",label:"🏆 Leaderboard"}].map(t=>(
             <button key={t.id} className="b-btn" onClick={()=>{playTick();setTab(t.id);}} style={{
-              flex:1,minWidth:100,padding:"9px 6px",borderRadius:12,fontWeight:800,
-              fontFamily:"'Baloo 2',cursive",fontSize:"0.78rem",cursor:"pointer",
-              background:tab===t.id?"linear-gradient(135deg,#C44DFF,#FF6B9D)":"rgba(255,255,255,0.7)",
-              color:tab===t.id?"#fff":"#7B2FBE",
-              border:`2px solid ${tab===t.id?"#C44DFF":"rgba(196,77,255,0.3)"}`,
-              boxShadow:tab===t.id?"0 4px 16px rgba(196,77,255,0.4)":"none",
-              whiteSpace:"nowrap",
+              flex:1,padding:"10px 0",borderRadius:14,fontWeight:800,fontFamily:"'Baloo 2',cursive",fontSize:"0.9rem",cursor:"pointer",
+              background:tab===t.id?"linear-gradient(135deg,#FF0080,#7B00D4)":"rgba(255,255,255,0.06)",
+              color:"#fff",border:`2px solid ${tab===t.id?"#FF0080":"rgba(255,255,255,0.15)"}`,
+              boxShadow:tab===t.id?"0 0 20px rgba(255,0,128,0.4)":"none",
             }}>{t.label}</button>
           ))}
         </div>
 
         <div style={{maxWidth:480,margin:"0 auto"}}>
-
-          {/* STUDENTS TAB */}
-          {tab==="students"&&(
-            sorted.length===0
-              ?<p style={{textAlign:"center",color:"#555",fontWeight:700,fontFamily:"'Baloo 2',cursive",marginTop:20}}>No students yet!</p>
-              :sorted.map((s,i)=>(
-              <div key={s.name||i} style={{background:"rgba(255,255,255,0.85)",borderRadius:18,padding:"12px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 14px rgba(196,77,255,0.1)",border:"2px solid rgba(196,77,255,0.15)"}}>
-                <div style={{fontSize:"1.6rem",minWidth:36,textAlign:"center"}}>{medals[i]||`#${i+1}`}</div>
+          {tab==="students"?(
+            sorted.length===0?<p style={{textAlign:"center",color:"#555",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>No students yet!</p>
+            :sorted.map((s,i)=>(
+              <div key={s.name} style={{background:"rgba(255,255,255,0.04)",borderRadius:18,padding:"12px 18px",marginBottom:10,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 14px rgba(0,0,0,0.3)",border:"2px solid rgba(255,255,255,0.08)"}}>
+                <div style={{fontSize:"1.8rem",minWidth:40,textAlign:"center"}}>{medals[i]||`#${i+1}`}</div>
                 <AvatarDisplay avatarId={s.avatar} size="sm"/>
                 <div style={{flex:1}}>
-                  <div style={{fontWeight:800,fontSize:"1rem",color:"#333",fontFamily:"'Baloo 2',cursive"}}>{s.name}</div>
-                  <div style={{color:"#888",fontSize:"0.72rem"}}>Joined: {s.joined||"Today"}</div>
-                  {s.games_played!==undefined&&<div style={{color:"#C44DFF",fontSize:"0.7rem",fontWeight:700}}>🎮 {s.games_played} games</div>}
+                  <div style={{fontWeight:800,fontSize:"1rem",color:"#fff",fontFamily:"'Baloo 2',cursive"}}>{s.name}</div>
+                  <div style={{color:"#aaa",fontSize:"0.78rem"}}>Joined: {s.joined||"Today"}</div>
                 </div>
                 <div style={{textAlign:"right"}}>
-                  <div style={{fontWeight:900,fontSize:"1.2rem",color:"#FFD700",textShadow:"0 0 8px rgba(255,215,0,0.5)"}}>⭐ {s.stars}</div>
-                  <button className="b-btn" style={{background:"rgba(255,0,0,0.1)",color:"#FF4444",border:"2px solid rgba(255,0,0,0.3)",borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:"0.7rem",fontFamily:"'Baloo 2',cursive",fontWeight:700,marginTop:4}}
-                    onClick={()=>{if(window.confirm(`Remove ${s.name}?`))onDeleteStudent(s.name);}}>🗑️ Remove</button>
+                  <div style={{fontWeight:900,fontSize:"1.2rem",color:"#FFD700",textShadow:"0 0 8px #FFD700"}}>⭐ {s.stars}</div>
+                  <button className="b-btn" style={{background:"rgba(255,0,0,0.2)",color:"#FF6666",border:"2px solid rgba(255,0,0,0.4)",borderRadius:10,padding:"3px 10px",cursor:"pointer",fontSize:"0.72rem",fontFamily:"'Baloo 2',cursive",fontWeight:700,marginTop:4}} onClick={()=>{if(window.confirm(`Remove ${s.name}?`))onDeleteStudent(s.name);}}>🗑️ Remove</button>
                 </div>
               </div>
             ))
-          )}
-
-          {/* LEADERBOARD TAB */}
-          {tab==="leaderboard"&&(()=>{
-            const rows = leaderboard.length>0 ? leaderboard : sorted;
-            return rows.length===0
-              ?<p style={{textAlign:"center",color:"#666",fontWeight:700,fontFamily:"'Baloo 2',cursive",marginTop:20}}>No players yet!</p>
-              :rows.map((s,i)=>(
-              <div key={s.name||i} className="b-slide" style={{
-                background:i===0?"linear-gradient(135deg,#FFF8E1,#FFE082)":i===1?"linear-gradient(135deg,#F5F5F5,#E0E0E0)":i===2?"linear-gradient(135deg,#FBE9E7,#FFCCBC)":"rgba(255,255,255,0.8)",
-                border:`3px solid ${borders[i]||"rgba(196,77,255,0.2)"}`,
-                borderRadius:20,padding:"14px 16px",marginBottom:12,
+          ):(
+            sorted.length===0?<p style={{textAlign:"center",color:"#aaa",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>No players yet!</p>
+            :sorted.map((s,i)=>(
+              <div key={s.name} className="b-slide" style={{
+                background:i===0?"linear-gradient(135deg,#3D1A00,#8B4500)":i===1?"linear-gradient(135deg,#1a1a1a,#2d2d2d)":i===2?"linear-gradient(135deg,#1a1500,#3d3000)":"rgba(255,255,255,0.04)",
+                border:`3px solid ${borders[i]||"rgba(255,255,255,0.1)"}`,
+                borderRadius:20,padding:"14px 18px",marginBottom:12,
                 display:"flex",alignItems:"center",gap:14,
-                boxShadow:i===0?"0 6px 24px rgba(255,215,0,0.3)":"0 4px 14px rgba(0,0,0,0.06)",
+                boxShadow:i===0?"0 0 30px rgba(255,215,0,0.4)":"none",
                 animationDelay:`${i*0.08}s`,
               }}>
-                <div style={{fontSize:"2rem",minWidth:40,textAlign:"center"}}>{medals[i]||`#${i+1}`}</div>
+                <div style={{fontSize:"2.2rem",minWidth:44,textAlign:"center"}}>{medals[i]||`#${i+1}`}</div>
                 <AvatarDisplay avatarId={s.avatar} size="sm"/>
                 <div style={{flex:1}}>
-                  <div style={{fontWeight:800,fontSize:"1.05rem",color:"#333",fontFamily:"'Baloo 2',cursive"}}>{s.name}</div>
-                  {s.games_played!==undefined&&<div style={{color:"#888",fontSize:"0.72rem"}}>🎮 {s.games_played} games played</div>}
+                  <div style={{fontWeight:800,fontSize:"1.1rem",color:"#fff",fontFamily:"'Baloo 2',cursive"}}>{s.name}</div>
+                  <div style={{color:"#888",fontSize:"0.78rem"}}>Joined: {s.joined||"Today"}</div>
                 </div>
                 <div style={{textAlign:"right"}}>
-                  <div style={{fontWeight:900,fontSize:"1.4rem",color:"#E65100",textShadow:"0 0 8px rgba(255,215,0,0.4)"}}>⭐ {s.stars}</div>
-                  <div style={{fontSize:"0.68rem",color:"#888",fontFamily:"'Baloo 2',cursive"}}>stars</div>
-                </div>
-              </div>
-            ));
-          })()}
-
-          {/* CATEGORIES TAB — backend only */}
-          {tab==="categories"&&(
-            loading
-              ?<p style={{textAlign:"center",color:"#666",fontWeight:700,fontFamily:"'Baloo 2',cursive",marginTop:20}}>Loading...</p>
-              :catStats.length===0
-              ?<p style={{textAlign:"center",color:"#666",fontWeight:700,fontFamily:"'Baloo 2',cursive",marginTop:20}}>No game data yet!</p>
-              :catStats.map((c,i)=>(
-              <div key={c.category} style={{background:"rgba(255,255,255,0.85)",borderRadius:16,padding:"14px 16px",marginBottom:10,boxShadow:"0 4px 14px rgba(196,77,255,0.1)",border:"2px solid rgba(196,77,255,0.15)"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <span style={{fontWeight:800,fontSize:"1rem",color:"#333",fontFamily:"'Baloo 2',cursive",textTransform:"capitalize"}}>{c.category}</span>
-                  <span style={{fontWeight:700,fontSize:"0.85rem",color:"#C44DFF",fontFamily:"'Baloo 2',cursive"}}>🎮 {c.games} games</span>
-                </div>
-                <div style={{height:16,background:"rgba(196,77,255,0.12)",borderRadius:8,overflow:"hidden"}}>
-                  <div style={{height:"100%",width:`${c.avg_accuracy||0}%`,background:"linear-gradient(90deg,#C44DFF,#FF6B9D)",borderRadius:8,transition:"width 1s ease"}}/>
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-                  <span style={{fontSize:"0.7rem",color:"#888",fontFamily:"'Baloo 2',cursive"}}>Accuracy</span>
-                  <span style={{fontSize:"0.78rem",fontWeight:800,color:"#C44DFF",fontFamily:"'Baloo 2',cursive"}}>{c.avg_accuracy||0}%</span>
+                  <div style={{fontWeight:900,fontSize:"1.5rem",color:"#FFD700",textShadow:"0 0 10px #FFD700"}}>⭐ {s.stars}</div>
+                  <div style={{fontSize:"0.7rem",color:"#888"}}>stars</div>
                 </div>
               </div>
             ))
@@ -1789,232 +1484,50 @@ function TeacherDashboard({students,onDeleteStudent,onBack,backendOk}){
   );
 }
 
-// ─── MAIN APP — Firebase + Backend Connected ────────────────────────────────
-import * as API from './api.js';
-
+// ─── MAIN APP ──────────────────────────────────────────────────────────────
 export default function App(){
-  const [showSplash,setShowSplash]         = useState(true);
-  const [screen,setScreen]                 = useState("home");
-  const [students,setStudents]             = useState([]);
-  const [currentStudent,setCurrentStudent] = useState(null);
-  const [selectedCategory,setSelectedCategory] = useState(null);
-  const [speed,setSpeed]                   = useState("slow");
-  const [backendOk,setBackendOk]           = useState(false);
-  const [sessionId,setSessionId]           = useState(null);
-  const [sessionStart,setSessionStart]     = useState(null);
+  const [showSplash,setShowSplash]=useState(true);
+  const [screen,setScreen]=useState("home");
+  const [students,setStudents]=useState(()=>{try{return JSON.parse(localStorage.getItem("blast_students")||"[]");}catch{return[];}});
+  const [currentStudent,setCurrentStudent]=useState(()=>{try{return JSON.parse(localStorage.getItem("blast_current")||"null");}catch{return null;}});
+  const [selectedCategory,setSelectedCategory]=useState(null);
+  const [speed,setSpeed]=useState("slow");
 
-  // ── Init: try to reach backend, load students ─────────────────────────────
-  useEffect(()=>{
-    initApp();
-  },[]);
+  function saveStudents(list){setStudents(list);localStorage.setItem("blast_students",JSON.stringify(list));}
 
-  async function initApp(){
-    // Test backend connectivity
-    try{
-      const res = await fetch(`${(await import('./firebase.js')).API_BASE}/api/health`);
-      if(res.ok) setBackendOk(true);
-    }catch(_){ setBackendOk(false); }
-
-    // If we have a saved token, load students from backend
-    if(API.hasToken()){
-      const list = await API.getStudents();
-      if(list){
-        setBackendOk(true);
-        setStudents(list);
-        localStorage.setItem('blast_students', JSON.stringify(list));
-      } else {
-        loadLocalStudents();
-      }
-    } else {
-      loadLocalStudents();
-    }
-
-    // Restore last logged-in student
-    try{
-      const saved = JSON.parse(localStorage.getItem('blast_current')||'null');
-      if(saved) setCurrentStudent(saved);
-    }catch(_){}
+  function login(name,pin,avatar){
+    let ex=students.find(s=>s.name.toLowerCase()===name.toLowerCase());
+    if(!ex){ex={name,stars:0,pin:pin||"",avatar:avatar||"unicorn",joined:new Date().toLocaleDateString()};saveStudents([...students,ex]);}
+    setCurrentStudent(ex);localStorage.setItem("blast_current",JSON.stringify(ex));
+    setScreen("categories");
   }
 
-  function loadLocalStudents(){
-    try{ setStudents(JSON.parse(localStorage.getItem('blast_students')||'[]')); }catch{}
+  function earnStar(n=1){
+    if(!currentStudent)return;
+    const up={...currentStudent,stars:currentStudent.stars+n};
+    setCurrentStudent(up);localStorage.setItem("blast_current",JSON.stringify(up));
+    saveStudents(students.map(s=>s.name===up.name?up:s));
   }
 
-  // ── Teacher login ─────────────────────────────────────────────────────────
-  async function handleTeacherLogin(email, password){
-    const data = await API.teacherLogin(email, password);
-    if(data?.token){
-      setBackendOk(true);
-      const list = await API.getStudents();
-      if(list){
-        setStudents(list);
-        localStorage.setItem('blast_students', JSON.stringify(list));
-      }
-      return { ok: true, teacher: data.teacher };
-    }
-    return { ok: false, error: 'Login failed. Check email/password.' };
+  function switchAccount(){setCurrentStudent(null);localStorage.removeItem("blast_current");stopBgMusic();startBgMusic("menu");setScreen("home");}
+  function deleteStudent(name){saveStudents(students.filter(s=>s.name!==name));if(currentStudent?.name===name)switchAccount();}
+
+  let content;
+  if(showSplash) content=<SplashScreen onDone={()=>setShowSplash(false)}/>;
+  else if(screen==="home") content=<HomeScreen students={students} currentStudent={currentStudent} onLogin={login} onSwitchAccount={switchAccount} onStart={()=>setScreen("categories")} onTeacher={()=>setScreen("teacher")}/>;
+  else if(screen==="teacher") content=<TeacherDashboard students={students} onDeleteStudent={deleteStudent} onBack={()=>setScreen("home")}/>;
+  else if(screen==="categories") content=<CategoryPicker student={currentStudent} onPick={cat=>{setSelectedCategory(cat);setScreen("mode");}} onHome={()=>setScreen("home")}/>;
+  else if(screen==="mode") content=<ModePicker category={selectedCategory} student={currentStudent} onMode={m=>setScreen(m==="module"?"module":"activity_pick")} onBack={()=>setScreen("categories")}/>;
+  else if(screen==="activity_pick") content=<ActivityPicker category={selectedCategory} student={currentStudent} onPick={t=>setScreen(t==="voice"?"voice":"matching")} onBack={()=>setScreen("mode")}/>;
+  else if(screen==="voice") content=<VoiceActivity category={selectedCategory} speed={speed} onEarn={earnStar} onBack={()=>setScreen("categories")} student={currentStudent}/>;
+  else if(screen==="matching") content=<MatchingActivity category={selectedCategory} speed={speed} onEarn={earnStar} onBack={()=>setScreen("categories")} student={currentStudent}/>;
+  else if(screen==="module"){
+    if(selectedCategory.id==="alphabets") content=<AlphabetModule onBack={()=>setScreen("mode")}/>;
+    if(selectedCategory.id==="numbers") content=<NumberModule onBack={()=>setScreen("mode")}/>;
+    if(selectedCategory.id==="shapes") content=<ShapeModule onBack={()=>setScreen("mode")}/>;
+    if(selectedCategory.id==="colors") content=<ColorModule onBack={()=>setScreen("mode")}/>;
   }
-
-  async function handleTeacherRegister(name, email, password, schoolName){
-    const data = await API.teacherRegister(name, email, password, schoolName);
-    if(data?.token){
-      setBackendOk(true);
-      return { ok: true };
-    }
-    return { ok: false, error: data?.error || 'Registration failed' };
-  }
-
-  // ── Student login / create ────────────────────────────────────────────────
-  async function login(name, pin, avatar){
-    let student = null;
-
-    if(backendOk){
-      student = await API.createStudent(name, avatar||'unicorn', pin||'');
-      if(student){
-        // Refresh student list from server
-        const list = await API.getStudents();
-        if(list){
-          setStudents(list);
-          localStorage.setItem('blast_students', JSON.stringify(list));
-        }
-      }
-    }
-
-    // Offline fallback
-    if(!student){
-      const ex = students.find(s=>s.name.toLowerCase()===name.toLowerCase());
-      if(ex){
-        student = ex;
-      } else {
-        student = {
-          id: 'local_'+Date.now(),
-          name, avatar: avatar||'unicorn',
-          pin: pin||'', stars: 0,
-          joined: new Date().toLocaleDateString()
-        };
-        const updated = [...students, student];
-        setStudents(updated);
-        localStorage.setItem('blast_students', JSON.stringify(updated));
-      }
-    }
-
-    playCorrect();
-    setCurrentStudent(student);
-    localStorage.setItem('blast_current', JSON.stringify(student));
-    setScreen('categories');
-  }
-
-  // ── Earn star ─────────────────────────────────────────────────────────────
-  async function earnStar(n=1){
-    if(!currentStudent) return;
-    const up = {...currentStudent, stars: (currentStudent.stars||0) + n};
-    setCurrentStudent(up);
-    localStorage.setItem('blast_current', JSON.stringify(up));
-    setStudents(prev => prev.map(s =>
-      (s.id===up.id || s.name===up.name) ? up : s
-    ));
-    // Sync to backend
-    if(backendOk && currentStudent.id && !String(currentStudent.id).startsWith('local_')){
-      await API.earnStarAPI(currentStudent.id, n);
-    }
-  }
-
-  // ── Game session tracking ─────────────────────────────────────────────────
-  async function startGameSession(category, mode){
-    setSessionStart(Date.now());
-    if(backendOk && currentStudent?.id && !String(currentStudent.id).startsWith('local_')){
-      const res = await API.startSession(currentStudent.id, category, mode);
-      if(res?.session_id) setSessionId(res.session_id);
-    }
-  }
-
-  async function finishGameSession(score, total, answers=[]){
-    if(backendOk && sessionId && currentStudent?.id){
-      const dur = sessionStart ? Math.round((Date.now()-sessionStart)/1000) : 0;
-      await API.finishSession(sessionId, currentStudent.id, score, total, dur);
-      if(answers.length > 0)
-        await API.saveAnswers(sessionId, currentStudent.id, answers);
-    }
-    setSessionId(null);
-    setSessionStart(null);
-  }
-
-  // ── Account management ────────────────────────────────────────────────────
-  function switchAccount(){
-    setCurrentStudent(null);
-    localStorage.removeItem('blast_current');
-    stopBgMusic(); startBgMusic('menu');
-    setScreen('home');
-  }
-
-  async function deleteStudent(name){
-    const s = students.find(x=>x.name===name);
-    if(backendOk && s?.id && !String(s.id).startsWith('local_'))
-      await API.deleteStudentAPI(s.id);
-    const updated = students.filter(x=>x.name!==name);
-    setStudents(updated);
-    localStorage.setItem('blast_students', JSON.stringify(updated));
-    if(currentStudent?.name===name) switchAccount();
-  }
-
-  // ── Render ────────────────────────────────────────────────────────────────
-  if(showSplash) return <SplashScreen onDone={()=>setShowSplash(false)}/>;
-
-  if(screen==="home") return <HomeScreen
-    students={students} currentStudent={currentStudent}
-    onLogin={login} onSwitchAccount={switchAccount}
-    onStart={()=>setScreen("categories")}
-    onTeacher={()=>setScreen("teacher")}
-    backendOk={backendOk}
-    onTeacherLogin={handleTeacherLogin}
-    onTeacherRegister={handleTeacherRegister}
-  />;
-
-  if(screen==="teacher") return <TeacherDashboard
-    students={students} onDeleteStudent={deleteStudent}
-    onBack={()=>setScreen("home")} backendOk={backendOk}
-  />;
-
-  if(screen==="categories") return <CategoryPicker
-    student={currentStudent}
-    onPick={cat=>{ setSelectedCategory(cat); setScreen("mode"); }}
-    onHome={()=>setScreen("home")}
-  />;
-
-  if(screen==="mode") return <ModePicker
-    category={selectedCategory} student={currentStudent}
-    onMode={m=>{
-      if(m!=="module") startGameSession(selectedCategory.id, m);
-      setScreen(m==="module"?"module":"activity_pick");
-    }}
-    onBack={()=>setScreen("categories")}
-  />;
-
-  if(screen==="activity_pick") return <ActivityPicker
-    category={selectedCategory} student={currentStudent}
-    onPick={t=>{ startGameSession(selectedCategory.id, t); setScreen(t==="voice"?"voice":"matching"); }}
-    onBack={()=>setScreen("mode")}
-  />;
-
-  if(screen==="voice") return <VoiceActivity
-    category={selectedCategory} speed={speed}
-    onEarn={earnStar} onFinish={finishGameSession}
-    onBack={()=>setScreen("categories")} student={currentStudent}
-  />;
-
-  if(screen==="matching") return <MatchingActivity
-    category={selectedCategory} speed={speed}
-    onEarn={earnStar} onFinish={finishGameSession}
-    onBack={()=>setScreen("categories")} student={currentStudent}
-  />;
-
-  if(screen==="module"){
-    if(selectedCategory.id==="alphabets") return <AlphabetModule onBack={()=>setScreen("mode")}/>;
-    if(selectedCategory.id==="numbers")   return <NumberModule   onBack={()=>setScreen("mode")}/>;
-    if(selectedCategory.id==="shapes")    return <ShapeModule    onBack={()=>setScreen("mode")}/>;
-    if(selectedCategory.id==="colors")    return <ColorModule    onBack={()=>setScreen("mode")}/>;
-  }
-  return null;
+  return <><YoutubeBackgroundMusic/>{content}</>;
 }
 
 // ─── STYLES ────────────────────────────────────────────────────────────────
@@ -2024,19 +1537,19 @@ const S={
   homeCard:{background:"rgba(255,255,255,0.75)",borderRadius:32,padding:"28px 24px",maxWidth:410,width:"100%",textAlign:"center",boxShadow:"0 8px 40px rgba(180,120,255,0.25),0 2px 12px rgba(0,0,0,0.1)",border:"3px solid rgba(255,255,255,0.9)",position:"relative",zIndex:1,backdropFilter:"blur(16px)"},
   title:{fontFamily:"'Lilita One',cursive",fontSize:"3rem",fontWeight:900,background:"linear-gradient(135deg,#FF6B9D 0%,#C44DFF 40%,#4D9FFF 100%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",margin:"4px 0"},
   loggedInBadge:{display:"flex",alignItems:"center",gap:14,background:"rgba(255,200,240,0.4)",borderRadius:22,padding:"14px 20px",marginBottom:14,textAlign:"left",border:"3px solid rgba(200,150,255,0.5)"},
-  page:{minHeight:"100vh",background:"transparent",padding:"8px 14px",fontFamily:FONT,position:"relative",overflow:"hidden"},
-  moduleCard:{borderRadius:24,padding:"16px",textAlign:"center",boxShadow:"0 8px 30px rgba(0,0,0,0.12)",maxWidth:390,margin:"0 auto 10px",border:"4px solid rgba(255,255,255,0.9)",backdropFilter:"blur(8px)"},
+  page:{minHeight:"100vh",background:"transparent",padding:"14px",fontFamily:FONT,position:"relative",overflow:"hidden"},
+  moduleCard:{borderRadius:28,padding:"28px 20px",textAlign:"center",boxShadow:"0 8px 30px rgba(0,0,0,0.12)",maxWidth:390,margin:"0 auto 14px",border:"4px solid rgba(255,255,255,0.9)",backdropFilter:"blur(8px)"},
   catGrid:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,maxWidth:430,margin:"0 auto"},
   catCard:{borderRadius:26,padding:"26px 14px",cursor:"pointer",fontFamily:FONT,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:6,transition:"all 0.15s"},
   modeBtn:{display:"flex",alignItems:"center",gap:18,padding:"22px 24px",borderRadius:24,border:"3px solid rgba(255,255,255,0.6)",color:"#fff",cursor:"pointer",fontFamily:FONT,textAlign:"left",boxShadow:"0 8px 30px rgba(0,0,0,0.2)"},
-  navRow:{display:"flex",alignItems:"center",justifyContent:"center",gap:10,maxWidth:390,margin:"0 auto",padding:"6px 0"},
-  navBtn:{background:"linear-gradient(135deg,#C44DFF,#FF6B9D)",color:"#fff",border:"none",borderRadius:14,padding:"9px 20px",fontWeight:800,cursor:"pointer",fontFamily:FONT,fontSize:"0.9rem",boxShadow:"0 4px 16px rgba(196,77,255,0.4)"},
-  navPill:{background:"rgba(255,255,255,0.7)",border:"2px solid rgba(196,77,255,0.5)",borderRadius:20,padding:"5px 14px",color:"#8833CC",fontWeight:800,fontSize:"0.9rem"},
-  soundBtn:{background:"linear-gradient(135deg,#C44DFF,#FF6B9D)",color:"#fff",border:"none",borderRadius:16,padding:"11px 26px",fontWeight:800,cursor:"pointer",fontFamily:FONT,fontSize:"0.95rem",marginTop:8,boxShadow:"0 4px 18px rgba(196,77,255,0.4)"},
+  navRow:{display:"flex",alignItems:"center",justifyContent:"center",gap:14,maxWidth:390,margin:"0 auto",padding:"8px 0"},
+  navBtn:{background:"linear-gradient(135deg,#C44DFF,#FF6B9D)",color:"#fff",border:"none",borderRadius:16,padding:"11px 26px",fontWeight:800,cursor:"pointer",fontFamily:FONT,fontSize:"1rem",boxShadow:"0 6px 20px rgba(196,77,255,0.4)"},
+  navPill:{background:"rgba(255,255,255,0.7)",border:"2px solid rgba(196,77,255,0.5)",borderRadius:20,padding:"6px 18px",color:"#8833CC",fontWeight:800,fontSize:"1rem"},
+  soundBtn:{background:"linear-gradient(135deg,#C44DFF,#FF6B9D)",color:"#fff",border:"none",borderRadius:18,padding:"13px 30px",fontWeight:800,cursor:"pointer",fontFamily:FONT,fontSize:"1.05rem",marginTop:12,boxShadow:"0 6px 24px rgba(196,77,255,0.4)"},
   input:{width:"100%",padding:"13px 18px",borderRadius:16,border:"3px solid rgba(196,77,255,0.4)",fontSize:"1rem",marginBottom:10,boxSizing:"border-box",fontFamily:FONT,outline:"none",fontWeight:700,background:"rgba(255,255,255,0.8)",color:"#333"},
   btnStart:{background:"linear-gradient(135deg,#FF6B9D,#C44DFF,#4D9FFF)",color:"#fff",border:"none",borderRadius:20,padding:"16px 28px",fontWeight:900,fontSize:"1.2rem",cursor:"pointer",width:"100%",marginBottom:8,fontFamily:FONT,boxShadow:"0 8px 30px rgba(196,77,255,0.4)",animation:"pulse-btn 2s ease infinite"},
   btnSec:{background:"rgba(196,77,255,0.1)",color:"#9933CC",border:"3px solid rgba(196,77,255,0.4)",borderRadius:16,padding:"10px 18px",fontWeight:800,cursor:"pointer",width:"100%",fontFamily:FONT},
-  backBtn:{background:"rgba(255,255,255,0.7)",border:"2px solid rgba(196,77,255,0.4)",borderRadius:10,padding:"5px 14px",cursor:"pointer",fontFamily:FONT,color:"#7B2FBE",fontWeight:700,marginBottom:6,display:"block",backdropFilter:"blur(5px)",fontSize:"0.85rem"},
+  backBtn:{background:"rgba(255,255,255,0.7)",border:"2px solid rgba(196,77,255,0.4)",borderRadius:12,padding:"7px 18px",cursor:"pointer",fontFamily:FONT,color:"#7B2FBE",fontWeight:700,marginBottom:12,display:"block",backdropFilter:"blur(5px)"},
   teacherBtn:{position:"fixed",top:16,right:16,zIndex:50,background:"rgba(255,255,255,0.7)",color:"#9933CC",border:"3px solid rgba(196,77,255,0.4)",borderRadius:16,padding:"8px 16px",fontWeight:800,fontSize:"0.82rem",cursor:"pointer",fontFamily:FONT,boxShadow:"0 4px 20px rgba(196,77,255,0.2)",whiteSpace:"nowrap",backdropFilter:"blur(5px)"},
   namePill:{background:"rgba(255,200,240,0.5)",border:"2px solid rgba(196,77,255,0.4)",borderRadius:20,padding:"5px 14px",color:"#9933CC",fontWeight:700,cursor:"pointer",fontFamily:FONT,fontSize:"0.88rem"},
   matchOption:{padding:"18px 10px",borderRadius:18,cursor:"pointer",fontWeight:800,fontSize:"1.05rem",fontFamily:FONT,boxShadow:"0 4px 14px rgba(0,0,0,0.12)",color:"#fff"},
