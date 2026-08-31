@@ -883,7 +883,7 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
     if(category.id==="alphabets") pool=ALPHABET.map(l=>({question:l,correct:l,distractors:shuffle(ALPHABET.filter(x=>x!==l)).slice(0,3),type:"letter"}));
     else if(category.id==="numbers") pool=NUMBERS.map(n=>({question:String(n),correct:String(n),distractors:shuffle(NUMBERS.filter(x=>x!==n).map(String)).slice(0,3),type:"number"}));
     else if(category.id==="shapes") pool=SHAPES.map(s=>({question:s.emoji,correct:s.name,distractors:shuffle(SHAPES.filter(x=>x.name!==s.name).map(x=>x.name)).slice(0,3),type:"shape",color:s.color}));
-    else if(category.id==="colors") pool=COLORS.map(c=>({question:c.hex,correct:c.name,distractors:shuffle(COLORS.filter(x=>x.name!==c.name).map(x=>x.name)).slice(0,3),type:"color"}));
+    else if(category.id==="colors") pool=COLORS.map(c=>({question:c.hex,correct:c.hex,distractors:shuffle(COLORS.filter(x=>x.hex!==c.hex).map(x=>x.hex)).slice(0,3),type:"color"}));
     const qs=shuffle(pool).slice(0,6).map(q=>({...q,options:shuffle([q.correct,...q.distractors])}));
     setQuestions(qs);setQIdx(0);setSelected(null);setResult(null);setScore(0);setCompliment("");setTimerKey(k=>k+1);
   }
@@ -937,7 +937,7 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
         {!result&&<CountdownTimer key={timerKey} seconds={timeLimit} onDone={handleTimeout} speed={speed}/>}
         <div key={qIdx} className="b-bounce" style={{...S.moduleCard,background:"linear-gradient(160deg,#FFF9C4,#FFEAA7)",border:"4px solid #FFD700",boxShadow:"0 8px 30px rgba(255,215,0,0.4)"}}>
           <p style={{fontWeight:800,color:"#E65100",marginBottom:10,fontFamily:"'Baloo 2',cursive",fontSize:"1rem"}}>What is this? 🤔</p>
-          {q.type==="color"?(<div style={{width:120,height:120,borderRadius:"50%",background:q.question,margin:"0 auto 10px",border:"6px solid white",boxShadow:`0 0 30px ${q.question}88`}}/>)
+          {q.type==="color"?(<div style={{width:110,height:110,borderRadius:"50%",background:q.question,margin:"0 auto 10px",border:"6px solid white",boxShadow:`0 0 24px ${q.question}88`,maxWidth:"100%"}}/>)
           :q.type==="shape"&&shapeImage?(<img src={shapeImage} alt={q.correct} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 0 18px rgba(0,0,0,0.12))"}} />)
           :q.type==="number"?(<img src={`/images/${q.question}.png`} alt={`Number ${q.question}`} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 4px 8px rgba(0,0,0,0.15))"}} />)
           :(<div style={{fontSize:"6rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#7B2FBE",filter:"drop-shadow(3px 3px 0 #FFD700)"}}>{q.question}</div>)}
@@ -951,16 +951,19 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
             </div>
           )}
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,maxWidth:380,margin:"12px auto"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,maxWidth:330,margin:"12px auto",padding:"0 6px"}}>
           {q.options.map(opt=>(
             <button key={opt} className="b-btn" onClick={()=>pick(opt)} style={{
               ...S.matchOption,
               background:selected===opt?(opt===q.correct?"linear-gradient(135deg,#00C853,#69F0AE)":"linear-gradient(135deg,#FF5252,#FF8A80)"):(result&&opt===q.correct?"linear-gradient(135deg,#00C853,#69F0AE)":"linear-gradient(135deg,#E3F2FD,#BBDEFB)"),
               color:selected===opt?"#fff":(result&&opt===q.correct?"#fff":"#1565C0"),
               border:`3px solid ${selected===opt?(opt===q.correct?"#00C853":"#FF5252"):(result&&opt===q.correct?"#00C853":"#90CAF9")}`,
-              fontWeight:900,fontSize:"1.1rem",
+              fontWeight:900,
               boxShadow:selected===opt?(opt===q.correct?"0 4px 20px #00C85388":"0 4px 20px #FF525288"):"0 3px 10px rgba(0,0,0,0.1)",
-            }}>{opt}</button>
+              minHeight:88,
+              padding:"10px 8px",
+              display:"flex",alignItems:"center",justifyContent:"center",
+            }}>{q.type==="color" ? <div style={{width:"100%",height:52,borderRadius:12,background:opt,border:"3px solid rgba(255,255,255,0.9)",boxShadow:`0 0 14px ${opt}88`}} /> : opt}</button>
           ))}
         </div>
         {result&&result!=="done"&&<div style={{textAlign:"center"}}><button className="b-btn" style={S.navBtn} onClick={next}>{qIdx+1>=questions.length?"Finish 🎉":"Next ▶"}</button></div>}
@@ -999,8 +1002,8 @@ function PairingGame({category,speed,onEarn,onBack,student}){
     }else if(category.id==="colors"){
       const colors=shuffle(COLORS).slice(0,totalPairs);
       pairList=colors.map(c=>([
-        {id:`rect-${c.hex}`,type:"color",value:c.hex,display:c.hex,label:c.name},
-        {id:`name-${c.hex}`,type:"color",value:c.hex,display:c.name}
+        {id:`swatch-${c.hex}`,type:"color",value:c.hex,display:c.hex,label:c.name},
+        {id:`name-${c.hex}`,type:"color",value:c.hex,display:c.hex,label:c.name}
       ])).flat();
     }else if(category.id==="shapes"){
       const shapes=shuffle(SHAPES).slice(0,totalPairs);
@@ -1083,23 +1086,23 @@ function PairingGame({category,speed,onEarn,onBack,student}){
         <h2 style={{...S.title,fontSize:"1.6rem",textAlign:"center",margin:"4px 0 6px"}}>🃏 Tap and Match!</h2>
         <p style={{textAlign:"center",color:"#aaa",fontWeight:700,marginBottom:8,fontFamily:"'Baloo 2',cursive"}}>Matched: {matched.size/2}/{totalPairs} | ⭐{matched.size/2}</p>
         {matched.size<totalPairs*2&&<CountdownTimer key={timerKey} seconds={timeLimit} onDone={handleTimeout} speed={speed}/>}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,maxWidth:380,margin:"12px auto",padding:"0 12px"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gap:8,maxWidth:320,margin:"12px auto",padding:"0 4px"}}>
           {pairs.map((item,idx)=>(
             <button key={item.id} className="b-btn" onClick={()=>handlePairClick(item)} disabled={matched.has(item.id)} style={{
-              padding:"16px 12px",borderRadius:16,border:"3px solid",cursor:matched.has(item.id)?"default":"pointer",
+              padding:"8px 6px",borderRadius:14,border:"2px solid",cursor:matched.has(item.id)?"default":"pointer",
               background:matched.has(item.id)?"linear-gradient(135deg,#90EE90,#00DD00)":"linear-gradient(135deg,#E3F2FD,#B3E5FC)",
               color:matched.has(item.id)?"#fff":"#1565C0",
               borderColor:matched.has(item.id)?"#00DD00":"#90CAF9",
-              fontWeight:900,fontSize:"1rem",
+              fontWeight:800,fontSize:"0.72rem",
               boxShadow:matched.has(item.id)?"0 4px 15px #00DD0088":"0 3px 10px rgba(0,0,0,0.1)",
-              transform:selected.some(s=>s.id===item.id)?"scale(0.95)":"scale(1)",
-              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:100,
+              transform:selected.some(s=>s.id===item.id)?"scale(0.96)":"scale(1)",
+              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:76,
               opacity:matched.has(item.id)?0.6:1,
               animation:matched.has(item.id)?"pop 0.4s ease":"none",
               transition:"all 0.15s"
             }}>
               {renderItem(item)}
-              <div style={{fontSize:"0.75rem",fontWeight:700,marginTop:6,color:"inherit"}}>{item.type==="number"&&!item.id.startsWith("obj-")?item.display:item.type==="color"&&item.id.startsWith("rect-")?"Color":item.label||""}</div>
+              <div style={{fontSize:"0.56rem",fontWeight:700,marginTop:3,color:"inherit"}}>{item.type==="number"&&!item.id.startsWith("obj-")?item.display:item.type==="color"?"":item.label||""}</div>
             </button>
           ))}
         </div>
