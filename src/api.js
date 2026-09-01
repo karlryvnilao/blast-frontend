@@ -1,32 +1,35 @@
-// ─── api.js — All backend calls ───────────────────────────────────────────────
+// ─── api.js — Updated req function ───────────────────────────────────────────
 import { API_BASE } from './firebase.js';
 
 let _token = null;
 
-// Load saved token on startup
 try {
   const saved = localStorage.getItem('blast_token');
   if (saved) _token = saved;
 } catch(_) {}
 
 async function req(method, path, body) {
-  try {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(_token ? { Authorization: `Bearer ${_token}` } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    return data;
-  } catch (e) {
-    console.warn('[API]', method, path, e.message);
-    return null; // null = offline / error — app falls back to localStorage
+  // Debug log: verify where requests are sending
+  console.log(`[API Request] ${method} ${API_BASE}${path}`);
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(_token ? { Authorization: `Bearer ${_token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`);
   }
+  return data;
+  // Removed catch block so actual errors bubble up to UI components
 }
+
+// ... Keep your export functions identical below this
 
 // ─── TOKEN ────────────────────────────────────────────────────────────────────
 export function setToken(t) {
