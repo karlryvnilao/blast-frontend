@@ -882,12 +882,22 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
 
   useEffect(()=>{ generate(); },[category]);
 
+  const NUMBER_EMOJIS=["💖","⭐","🌟","🍎","🎈","🌼","🍋","✨","⚽","🎁"];
+
+  function randomEmojiCount(count){
+    return Array.from({ length: count }, () => randomOf(NUMBER_EMOJIS)).join(" ");
+  }
+
+  function numberEmoji(count, emoji="💖"){
+    return Array.from({ length: count }, () => emoji).join(" ");
+  }
+
   function generate(){
     let pool=[];
     if(category.id==="alphabets") pool=ALPHABET.map(l=>({question:l,correct:l,distractors:shuffle(ALPHABET.filter(x=>x!==l)).slice(0,3),type:"letter"}));
     else if(category.id==="numbers") pool=NUMBERS.map(n=>({question:String(n),correct:String(n),distractors:shuffle(NUMBERS.filter(x=>x!==n).map(String)).slice(0,3),type:"number"}));
     else if(category.id==="shapes") pool=SHAPES.map(s=>({question:s.emoji,correct:s.emoji,distractors:shuffle(SHAPES.filter(x=>x.name!==s.name).map(x=>x.emoji)).slice(0,3),type:"shape",color:s.color,name:s.name}));
-    else if(category.id==="colors") pool=COLORS.map(c=>({question:c.hex,correct:c.name,distractors:shuffle(COLORS.filter(x=>x.name!==c.name).map(x=>x.name)).slice(0,3),type:"color"}));
+    else if(category.id==="colors") pool=COLORS.map(c=>({question:c.hex,correct:c.name,distractors:shuffle(COLORS.filter(x=>x.name!==c.name).map(x=>x.name)).slice(0,3),type:"color",colorHex:c.hex}));
     const qs=shuffle(pool).slice(0,6).map(q=>({...q,options:shuffle([q.correct,...q.distractors])}));
     setQuestions(qs);setQIdx(0);setSelected(null);setResult(null);setScore(0);setCompliment("");setTimerKey(k=>k+1);
   }
@@ -941,9 +951,9 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
         {!result&&<CountdownTimer key={timerKey} seconds={timeLimit} onDone={handleTimeout} speed={speed}/>}
         <div key={qIdx} className="b-bounce" style={{...S.moduleCard,background:"linear-gradient(160deg,#FFF9C4,#FFEAA7)",border:"4px solid #FFD700",boxShadow:"0 8px 30px rgba(255,215,0,0.4)"}}>
           <p style={{fontWeight:800,color:"#E65100",marginBottom:10,fontFamily:"'Baloo 2',cursive",fontSize:"1rem"}}>What is this? 🤔</p>
-          {q.type==="color"?(<div style={{width:120,height:120,borderRadius:"50%",background:q.question,margin:"0 auto 10px",border:"6px solid white",boxShadow:`0 0 30px ${q.question}88`}}/>)
+          {q.type==="color"?(<div style={{width:120,height:120,borderRadius:"50%",background:q.colorHex || q.question,margin:"0 auto 10px",border:"6px solid white",boxShadow:`0 0 30px ${q.colorHex || q.question}88`}}/>)
           :q.type==="shape"&&shapeImage?(<img src={shapeImage} alt={q.correct} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 0 18px rgba(0,0,0,0.12))"}} />)
-          :q.type==="number"?(<img src={`/images/${q.question}.png`} alt={`Number ${q.question}`} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 4px 8px rgba(0,0,0,0.15))"}} />)
+          :q.type==="number"?(<div style={{fontSize:"4rem",lineHeight:1,textAlign:"center",fontWeight:900,color:"#7B2FBE",filter:"drop-shadow(3px 3px 0 #FFD700)"}}>{q.question}</div>)
           :(<div style={{fontSize:"6rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#7B2FBE",filter:"drop-shadow(3px 3px 0 #FFD700)"}}>{q.question}</div>)}
           {compliment&&(
             <div className="b-compliment" style={{
@@ -965,7 +975,25 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
               fontWeight:900,fontSize:q.type==="shape"?"2.5rem":"1.1rem",padding:q.type==="shape"?"20px":"12px",
               boxShadow:selected===opt?(opt===q.correct?"0 4px 20px #27AE6066":"0 4px 20px #C0392B66"):"0 3px 10px rgba(0,0,0,0.15)",
               display:"flex",alignItems:"center",justifyContent:"center",minHeight:"80px"
-            }}>{q.type==="shape"?opt:<span>{opt}</span>}</button>
+            }}>
+              {q.type==="color" ? (
+                <span style={{
+                  display:"inline-block",
+                  width:44,
+                  height:44,
+                  borderRadius:12,
+                  background: COLORS.find(c => c.name === opt)?.hex || "#ddd",
+                  border:"3px solid rgba(255,255,255,0.85)",
+                  boxShadow:"0 0 18px rgba(0,0,0,0.15)",
+                }} />
+              ) : q.type==="number" ? (
+                <span style={{fontSize:"1.7rem", whiteSpace:"pre-wrap", lineHeight:1.3}}>{randomEmojiCount(Number(opt))}</span>
+              ) : q.type==="shape" ? (
+                opt
+              ) : (
+                <span>{opt}</span>
+              )}
+            </button>
           ))}
         </div>
         {result&&result!=="done"&&<div style={{textAlign:"center"}}><button className="b-btn" style={S.navBtn} onClick={next}>{qIdx+1>=questions.length?"Finish 🎉":"Next ▶"}</button></div>}
