@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { LOGO } from "./logo.js";
-import { earnStarAPI, createStudent, updateStudent, guestLogin } from "./api.js";
+import { earnStarAPI, createStudent, updateStudent, guestLogin, getLeaderboard, getStudents } from "./api.js";
 import { db } from "./firebase.js";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { getToken, getUserId } from "./api.js";
@@ -1562,52 +1562,48 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
   const [firestoreStudents,setFirestoreStudents]=useState(students);
   const TEACHER_PIN="1234";
   
-  // Fetch latest student data from Firestore
+  // Always load the shared teacher roster from the backend/database, not the local device cache.
   useEffect(()=>{
-    async function fetchStudentsFromFirestore() {
+    async function fetchStudentsFromDatabase() {
       try {
-        const teacherId = getUserId();
-        if (!teacherId) {
-          setFirestoreStudents(students);
+        let token = getToken();
+        if (!token) {
+          const guest = await guestLogin();
+          token = guest?.token || getToken();
+        }
+
+        if (!token) {
+          setFirestoreStudents([]);
           return;
         }
-        
-        const studentsRef = collection(db, 'teachers', teacherId, 'students');
-        const snapshot = await getDocs(studentsRef);
-        const firestoreData = [];
-        
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          firestoreData.push({
-            id: data.id,
-            name: data.name || '',
-            avatar: data.avatar || 'unicorn',
-            pin: data.pin || '',
-            stars: data.stars || 0,
-            joined: data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'Today',
-          });
-        });
-        
-        if (firestoreData.length > 0) {
-          setFirestoreStudents(firestoreData);
-        } else {
-          setFirestoreStudents(students);
-        }
+
+        const apiStudents = await getLeaderboard(50);
+        const liveData = (apiStudents || []).map((student) => ({
+          id: student.id || student.name,
+          name: student.name || '',
+          avatar: student.avatar || 'unicorn',
+          pin: student.pin || '',
+          stars: Number(student.stars || 0),
+          joined: student.joined || (student.createdAt ? new Date(student.createdAt).toLocaleDateString() : 'Today'),
+          games_played: Number(student.games_played || 0),
+        }));
+
+        setFirestoreStudents(liveData);
       } catch (err) {
-        console.error('[Firestore] Error fetching students:', err.message);
-        setFirestoreStudents(students);
+        console.error('[Dashboard] Error fetching database students:', err.message);
+        setFirestoreStudents([]);
       }
     }
     
     if (unlocked) {
-      fetchStudentsFromFirestore();
-      // Refresh every 2 seconds to show live updates
-      const interval = setInterval(fetchStudentsFromFirestore, 2000);
+      fetchStudentsFromDatabase();
+      const interval = setInterval(fetchStudentsFromDatabase, 3000);
       return () => clearInterval(interval);
     }
-  }, [unlocked, students]);
+  }, [unlocked]);
   
   const sorted=[...firestoreStudents].sort((a,b)=>b.stars-a.stars);
+  const topStudent = sorted[0] || null;
   const medals=["🥇","🥈","🥉"];
   const borders=["#FFD700","#C0C0C0","#CD7F32"];
 
@@ -1634,6 +1630,22 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
           <div style={{fontSize:"3rem"}}>🍎</div>
           <h2 style={{...S.title,fontSize:"1.9rem",margin:"4px 0"}}>Teacher Dashboard</h2>
           <p style={{color:"#aaa",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>{firestoreStudents.length} students registered</p>
+          {topStudent && (
+            <div style={{
+              margin:"10px auto 0",
+              maxWidth:420,
+              background:"linear-gradient(135deg, rgba(255,215,0,0.18), rgba(255,128,0,0.12))",
+              border:"2px solid rgba(255,215,0,0.5)",
+              borderRadius:16,
+              padding:"10px 14px",
+              color:"#fff",
+              fontWeight:800,
+              fontFamily:"'Baloo 2',cursive",
+              boxShadow:"0 0 22px rgba(255,215,0,0.22)",
+            }}>
+              🏆 Top Student: <span style={{color:"#FFD700"}}>{topStudent.name}</span> • ⭐ {topStudent.stars}
+            </div>
+          )}
         </div>
         {/* TABS */}
         <div style={{display:"flex",gap:10,maxWidth:480,margin:"0 auto 16px",padding:"0 4px"}}>
@@ -1679,7 +1691,7 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
                 <AvatarDisplay avatarId={s.avatar} size="sm"/>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:800,fontSize:"1.1rem",color:"#fff",fontFamily:"'Baloo 2',cursive"}}>{s.name}</div>
-                  <div style={{color:"#888",fontSize:"0.78rem"}}>Joined: {s.joined||"Today"}</div>
+                  <div style={{color:"#888",fontSize:"0.78rem"}}>📊 {s.games_played||0} games | Joined: {s.joined||"Today"}</div>
                 </div>
                 <div style={{textAlign:"right"}}>
                   <div style={{fontWeight:900,fontSize:"1.5rem",color:"#FFD700",textShadow:"0 0 10px #FFD700"}}>⭐ {s.stars}</div>
@@ -1707,31 +1719,37 @@ export default function App(){
   useEffect(()=>{
     async function initializeApp(){
       try{
-        // Auto-login as guest if no token
         if(!getToken()){
           console.log('[App] No token found, logging in as guest...');
-          await guestLogin();
-          console.log('[App] Guest login successful');
+          const guest = await guestLogin();
+          console.log('[App] Guest login successful', guest?.teacher?.id || getUserId());
         }
-        
-        // Now fetch students from Firestore
-        const teacherId=getUserId();
+
+        const teacherId = getUserId();
         if(!teacherId){
           console.warn('[App] No teacher ID after login');
           return;
         }
-        
-        const studentsRef=collection(db,'teachers',teacherId,'students');
-        const snapshot=await getDocs(studentsRef);
-        const firestoreStudents=[];
-        snapshot.forEach(doc=>{
-          const data=doc.data();
-          firestoreStudents.push({
-            id:data.id||doc.id,name:data.name||'',avatar:data.avatar||'unicorn',pin:data.pin||'',
-            stars:data.stars||0,joined:data.joined||(data.createdAt?new Date(data.createdAt).toLocaleDateString():'Today'),
+
+        try {
+          const studentsRef = collection(db, 'teachers', teacherId, 'students');
+          const snapshot = await getDocs(studentsRef);
+          const firestoreStudents = [];
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            firestoreStudents.push({
+              id: data.id || doc.id,
+              name: data.name || '',
+              avatar: data.avatar || 'unicorn',
+              pin: data.pin || '',
+              stars: data.stars || 0,
+              joined: data.joined || (data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'Today'),
+            });
           });
-        });
-        if(firestoreStudents.length>0)saveStudents(firestoreStudents);
+          if (firestoreStudents.length > 0) saveStudents(firestoreStudents);
+        } catch (firestoreErr) {
+          console.warn('[App] Firestore fetch failed, using backend roster instead:', firestoreErr.message);
+        }
       }catch(err){
         console.error('[App] Initialization error:',err.message);
       }

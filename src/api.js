@@ -1,22 +1,21 @@
 // ─── api.js — Updated req function ───────────────────────────────────────────
 import { API_BASE, db } from './firebase.js';
-import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+
+const TOKEN_KEY = 'blast_token';
+const USER_ID_KEY = 'blast_user_id';
 
 let _token = null;
 let _userId = null;
 
-// ─── Initialize token from Firestore ──────────────────────────────────────────
-async function initializeToken() {
+function initializeToken() {
   try {
-    // Try to get the stored user ID and token from Firestore
-    const appStateDoc = await getDoc(doc(db, 'appState', 'currentUser'));
-    if (appStateDoc.exists()) {
-      const data = appStateDoc.data();
-      _token = data.token;
-      _userId = data.userId;
-    }
+    const savedToken = localStorage.getItem(TOKEN_KEY);
+    const savedUserId = localStorage.getItem(USER_ID_KEY);
+    _token = savedToken || null;
+    _userId = savedUserId || null;
   } catch (err) {
-    console.warn('[Firestore] Could not load token:', err.message);
+    console.warn('[Storage] Could not load token:', err.message);
   }
 }
 
@@ -50,24 +49,19 @@ async function req(method, path, body) {
 export async function setToken(t, userId = null) {
   _token = t;
   _userId = userId;
+
   try {
-    if (t) {
-      // Save token to Firestore
-      await setDoc(doc(db, 'appState', 'currentUser'), {
-        token: t,
-        userId: userId,
-        updatedAt: new Date().toISOString(),
-      });
-    } else {
-      // Clear token from Firestore
-      await setDoc(doc(db, 'appState', 'currentUser'), {
-        token: null,
-        userId: null,
-        updatedAt: new Date().toISOString(),
-      });
+    if (typeof localStorage !== 'undefined') {
+      if (t) {
+        localStorage.setItem(TOKEN_KEY, t);
+        if (userId) localStorage.setItem(USER_ID_KEY, userId);
+      } else {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_ID_KEY);
+      }
     }
   } catch (err) {
-    console.error('[Firestore] Error saving token:', err.message);
+    console.error('[Storage] Error saving token:', err.message);
   }
 }
 export function getToken()  { return _token; }
@@ -75,12 +69,16 @@ export function hasToken()  { return !!_token; }
 export function getUserId() { return _userId; }
 
 // ─── TEACHER AUTH ─────────────────────────────────────────────────────────────
+function resolveTeacherPayload(data) {
+  return data?.teacher || data || {};
+}
+
 export async function teacherRegister(name, email, password, schoolName) {
   const data = await req('POST', '/api/teacher/register', { name, email, password, schoolName });
   if (data?.token) {
-    await setToken(data.token, data.id);
-    // Save teacher info to Firestore
-    await syncTeacherData(data);
+    const teacher = resolveTeacherPayload(data);
+    await setToken(data.token, teacher?.id || data?.id);
+    await syncTeacherData(teacher);
   }
   return data;
 }
@@ -88,9 +86,9 @@ export async function teacherRegister(name, email, password, schoolName) {
 export async function teacherLogin(email, password) {
   const data = await req('POST', '/api/teacher/login', { email, password });
   if (data?.token) {
-    await setToken(data.token, data.id);
-    // Save teacher info to Firestore
-    await syncTeacherData(data);
+    const teacher = resolveTeacherPayload(data);
+    await setToken(data.token, teacher?.id || data?.id);
+    await syncTeacherData(teacher);
   }
   return data;
 }
@@ -98,7 +96,8 @@ export async function teacherLogin(email, password) {
 export async function guestLogin() {
   const data = await req('POST', '/api/guest-login', {});
   if (data?.token) {
-    await setToken(data.token, data.id);
+    const teacher = resolveTeacherPayload(data);
+    await setToken(data.token, teacher?.id || data?.id);
   }
   return data;
 }
@@ -106,8 +105,11 @@ export async function guestLogin() {
 // ─── Firestore Sync Functions ─────────────────────────────────────────────────
 async function syncTeacherData(teacherData) {
   try {
-    await setDoc(doc(db, 'teachers', teacherData.id), {
-      id: teacherData.id,
+    const teacherId = teacherData?.id;
+    if (!teacherId) return;
+
+    await setDoc(doc(db, 'teachers', teacherId), {
+      id: teacherId,
       name: teacherData.name,
       email: teacherData.email,
       schoolName: teacherData.schoolName,
