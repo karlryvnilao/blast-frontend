@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { LOGO } from "./logo.js";
+import { earnStarAPI, createStudent, updateStudent, guestLogin } from "./api.js";
+import { db } from "./firebase.js";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { getToken, getUserId } from "./api.js";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const NUMBERS  = Array.from({ length: 10 }, (_, i) => i);
@@ -1555,8 +1559,55 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
   const [pin,setPin]=useState("");
   const [unlocked,setUnlocked]=useState(false);
   const [tab,setTab]=useState("students");
+  const [firestoreStudents,setFirestoreStudents]=useState(students);
   const TEACHER_PIN="1234";
-  const sorted=[...students].sort((a,b)=>b.stars-a.stars);
+  
+  // Fetch latest student data from Firestore
+  useEffect(()=>{
+    async function fetchStudentsFromFirestore() {
+      try {
+        const teacherId = getUserId();
+        if (!teacherId) {
+          setFirestoreStudents(students);
+          return;
+        }
+        
+        const studentsRef = collection(db, 'teachers', teacherId, 'students');
+        const snapshot = await getDocs(studentsRef);
+        const firestoreData = [];
+        
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          firestoreData.push({
+            id: data.id,
+            name: data.name || '',
+            avatar: data.avatar || 'unicorn',
+            pin: data.pin || '',
+            stars: data.stars || 0,
+            joined: data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'Today',
+          });
+        });
+        
+        if (firestoreData.length > 0) {
+          setFirestoreStudents(firestoreData);
+        } else {
+          setFirestoreStudents(students);
+        }
+      } catch (err) {
+        console.error('[Firestore] Error fetching students:', err.message);
+        setFirestoreStudents(students);
+      }
+    }
+    
+    if (unlocked) {
+      fetchStudentsFromFirestore();
+      // Refresh every 2 seconds to show live updates
+      const interval = setInterval(fetchStudentsFromFirestore, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [unlocked, students]);
+  
+  const sorted=[...firestoreStudents].sort((a,b)=>b.stars-a.stars);
   const medals=["🥇","🥈","🥉"];
   const borders=["#FFD700","#C0C0C0","#CD7F32"];
 
@@ -1582,7 +1633,7 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
         <div style={{textAlign:"center",marginBottom:16}}>
           <div style={{fontSize:"3rem"}}>🍎</div>
           <h2 style={{...S.title,fontSize:"1.9rem",margin:"4px 0"}}>Teacher Dashboard</h2>
-          <p style={{color:"#aaa",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>{students.length} students registered</p>
+          <p style={{color:"#aaa",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>{firestoreStudents.length} students registered</p>
         </div>
         {/* TABS */}
         <div style={{display:"flex",gap:10,maxWidth:480,margin:"0 auto 16px",padding:"0 4px"}}>
@@ -1652,20 +1703,79 @@ export default function App(){
   const [selectedCategory,setSelectedCategory]=useState(null);
   const [speed,setSpeed]=useState("slow");
 
+  // Sync students from Firestore on app load
+  useEffect(()=>{
+    async function initializeApp(){
+      try{
+        // Auto-login as guest if no token
+        if(!getToken()){
+          console.log('[App] No token found, logging in as guest...');
+          await guestLogin();
+          console.log('[App] Guest login successful');
+        }
+        
+        // Now fetch students from Firestore
+        const teacherId=getUserId();
+        if(!teacherId){
+          console.warn('[App] No teacher ID after login');
+          return;
+        }
+        
+        const studentsRef=collection(db,'teachers',teacherId,'students');
+        const snapshot=await getDocs(studentsRef);
+        const firestoreStudents=[];
+        snapshot.forEach(doc=>{
+          const data=doc.data();
+          firestoreStudents.push({
+            id:data.id||doc.id,name:data.name||'',avatar:data.avatar||'unicorn',pin:data.pin||'',
+            stars:data.stars||0,joined:data.joined||(data.createdAt?new Date(data.createdAt).toLocaleDateString():'Today'),
+          });
+        });
+        if(firestoreStudents.length>0)saveStudents(firestoreStudents);
+      }catch(err){
+        console.error('[App] Initialization error:',err.message);
+      }
+    }
+    initializeApp();
+  },[]);
+
   function saveStudents(list){setStudents(list);localStorage.setItem("blast_students",JSON.stringify(list));}
 
-  function login(name,pin,avatar){
+  async function login(name,pin,avatar){
     let ex=students.find(s=>s.name.toLowerCase()===name.toLowerCase());
-    if(!ex){ex={name,stars:0,pin:pin||"",avatar:avatar||"unicorn",joined:new Date().toLocaleDateString()};saveStudents([...students,ex]);}
+    if(!ex){
+      ex={name,stars:0,pin:pin||"",avatar:avatar||"unicorn",joined:new Date().toLocaleDateString()};
+      saveStudents([...students,ex]);
+      // Also create in backend/Firestore
+      try {
+        const result = await createStudent(name, avatar, pin);
+        ex.id = result.id; // Store the Firebase ID
+        saveStudents([...students.filter(s=>s.name!==name), ex]);
+      } catch(err) {
+        console.error("[API] Error creating student:", err.message);
+      }
+    }
     setCurrentStudent(ex);localStorage.setItem("blast_current",JSON.stringify(ex));
     setScreen("categories");
   }
 
-  function earnStar(n=1){
+  async function earnStar(n=1){
     if(!currentStudent)return;
     const up={...currentStudent,stars:currentStudent.stars+n};
-    setCurrentStudent(up);localStorage.setItem("blast_current",JSON.stringify(up));
+    setCurrentStudent(up);
+    localStorage.setItem("blast_current",JSON.stringify(up));
     saveStudents(students.map(s=>s.name===up.name?up:s));
+    // Save stars to Firestore database
+    try {
+      if(currentStudent.id) {
+        await earnStarAPI(currentStudent.id, n);
+      } else {
+        // If no ID, use updateStudent instead
+        await updateStudent(currentStudent.name, {stars: up.stars});
+      }
+    } catch(err) {
+      console.error("[API] Error saving stars:", err.message);
+    }
   }
 
   function switchAccount(){setCurrentStudent(null);localStorage.removeItem("blast_current");stopBgMusic();startBgMusic("menu");setScreen("home");}
