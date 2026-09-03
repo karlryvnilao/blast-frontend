@@ -898,6 +898,7 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
 
   const q=questions[qIdx];
   const colorImage=q?.type==="color"?COLORS.find(c=>c.name===q.correct)?.image:null;
+  const shapeImage=q?.type==="shape"?SHAPES.find(s=>s.emoji===q.correct)?.image:null;
 
   function pick(opt){
     if(result)return;
@@ -938,7 +939,7 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
         <div key={qIdx} className="b-bounce" style={{...S.moduleCard,background:"linear-gradient(160deg,#FFF9C4,#FFEAA7)",border:"4px solid #FFD700",boxShadow:"0 8px 30px rgba(255,215,0,0.4)"}}>
           <p style={{fontWeight:800,color:"#E65100",marginBottom:10,fontFamily:"'Baloo 2',cursive",fontSize:"1rem"}}>What is this? 🤔</p>
           {q.type==="color"?(<img src={colorImage} alt={q.correct} style={{display:"block",width:"min(220px,80vw)",height:180,objectFit:"contain",margin:"0 auto 10px",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 0 18px rgba(0,0,0,0.12))"}} />)
-          :q.type==="shape"?(<div style={{fontSize:"6rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#7B2FBE",filter:"drop-shadow(3px 3px 0 #FFD700)"}}>{q.question}</div>)
+          :q.type==="shape"&&shapeImage?(<img src={shapeImage} alt={q.correct} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 0 18px rgba(0,0,0,0.12))"}} />)
           :q.type==="number"?(<img src={`/images/${q.question}.png`} alt={`Number ${q.question}`} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 4px 8px rgba(0,0,0,0.15))"}} />)
           :(<div style={{fontSize:"6rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#7B2FBE",filter:"drop-shadow(3px 3px 0 #FFD700)"}}>{q.question}</div>)}
           {compliment&&(
@@ -1065,7 +1066,7 @@ function PairingGame({category,speed,onEarn,onBack,student}){
       const num=parseInt(item.id.split("-")[1]);
       return(
         <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center",alignItems:"center"}}>
-          {Array.from({length:num}).map((_,i)=><div key={i} style={{width:20,height:20,borderRadius:"50%",background:"#FFD700",boxShadow:"0 0 8px #FFD700"}}/>)}
+          {Array.from({length:num}).map((_,i)=><div key={i} style={{width:20,height:20,borderRadius:"50%",background:"#263238",boxShadow:"0 0 8px rgba(38,50,56,0.65)"}}/>)}
         </div>
       );
     }else if(category.id==="colors"&&item.type==="color"&&item.id.startsWith("rect-")){
@@ -1073,6 +1074,9 @@ function PairingGame({category,speed,onEarn,onBack,student}){
       return(
         <img src={color?.image} alt={color?.name||item.display} style={{width:86,height:86,objectFit:"contain"}}/>
       );
+    }else if(category.id==="colors"&&item.type==="color"&&item.id.startsWith("name-")){
+      const color=COLORS.find(c=>c.hex===item.value);
+      return <div title={color?.name||item.display} aria-label={color?.name||item.display} style={{width:86,height:86,borderRadius:"50%",background:color?.hex||"#ddd",border:"3px solid white",boxShadow:`0 0 14px ${color?.hex||"#ddd"}88`}}/>;
     }else if(category.id==="shapes"&&item.type==="shape"&&item.id.startsWith("emoji-")){
       const shape=SHAPES.find(s=>s.name===item.value);
       return <img src={shape?.matchImage} alt={shape?.name||item.display} style={{width:86,height:86,objectFit:"contain"}}/>;
@@ -1524,6 +1528,66 @@ function VoiceActivity({category,speed,onEarn,onBack,student}){
   );
 }
 
+// ─── COLOR MEMORY GAME ─────────────────────────────────────────────────────
+function ColorSortingGame({onEarn,onBack,student}){
+  const [cards,setCards]=useState([]);
+  const [flipped,setFlipped]=useState([]);
+  const [matched,setMatched]=useState([]);
+  const [locked,setLocked]=useState(false);
+  const totalPairs=5;
+
+  useEffect(()=>{
+    const roundColors=shuffle(COLORS).slice(0,totalPairs);
+    setCards(shuffle(roundColors.flatMap(color=>[
+      {...color,id:`${color.name}-1`},
+      {...color,id:`${color.name}-2`},
+    ])));
+  },[]);
+
+  function flipCard(card){
+    if(locked||matched.includes(card.name)||flipped.some(item=>item.id===card.id))return;
+    const nextFlipped=[...flipped,card];
+    setFlipped(nextFlipped);
+    if(nextFlipped.length!==2)return;
+    setLocked(true);
+    if(nextFlipped[0].name===nextFlipped[1].name){
+      setMatched(previous=>[...previous,card.name]);
+      setFlipped([]);setLocked(false);onEarn(1);playCorrect();
+    }else{
+      playWrong();
+      setTimeout(()=>{setFlipped([]);setLocked(false);},900);
+    }
+  }
+
+  const isFaceUp=card=>flipped.some(item=>item.id===card.id)||matched.includes(card.name);
+  if(matched.length===totalPairs)return <GameResult score={matched.length} total={totalPairs} emoji="🎨" title="GREAT MEMORY!" onBack={onBack} student={student}/>;
+
+  return(
+    <div style={S.page}><GlobalStyles/><BgSpace/><MusicBtn type="game"/>
+      <div style={{position:"relative",zIndex:1}}>
+        <button className="b-btn" style={S.backBtn} onClick={()=>{playTick();onBack();}}>← Back</button>
+        <h2 style={{...S.title,fontSize:"1.6rem",textAlign:"center",margin:"4px 0 6px"}}>🎨 Color Memory!</h2>
+        <p style={{textAlign:"center",color:"#777",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>Find the matching color cards | ⭐{matched.length}</p>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:12,maxWidth:400,margin:"16px auto"}}>
+          {cards.map(card=>{
+            const faceUp=isFaceUp(card);
+            return(
+              <button key={card.id} className="b-btn" onClick={()=>flipCard(card)} aria-label={faceUp?card.name:"Face-down color card"} style={{padding:0,minHeight:112,border:"none",background:"transparent",perspective:800}}>
+                <span style={{display:"block",position:"relative",width:"100%",height:112,transformStyle:"preserve-3d",transform:faceUp?"rotateY(180deg)":"rotateY(0deg)",transition:"transform 0.45s"}}>
+                  <span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",backfaceVisibility:"hidden",borderRadius:16,border:"4px solid #8E44AD",background:"linear-gradient(135deg,#9B59B6,#5B2C6F)",color:"#fff",fontSize:"2.8rem",fontWeight:900}}>?</span>
+                  <span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",backfaceVisibility:"hidden",transform:"rotateY(180deg)",borderRadius:16,border:`4px solid ${card.hex}`,background:"linear-gradient(135deg,#fff,#ECF0F1)"}}>
+                    <img src={card.image} alt={card.name} style={{width:82,height:82,objectFit:"contain"}}/>
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── ACTIVITY PICKER ───────────────────────────────────────────────────────
 function ActivityPicker({category,student,onPick,onBack}){
   return(
@@ -1536,9 +1600,9 @@ function ActivityPicker({category,student,onPick,onBack}){
           <p style={{color:"#FFD700",fontWeight:800,fontFamily:"'Baloo 2',cursive",textShadow:"0 0 8px #FFD700"}}>⭐ {student.stars} stars</p>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:380,margin:"0 auto",padding:"0 12px"}}>
-          <button className="b-btn" style={{...S.modeBtn,background:"linear-gradient(135deg,#FF6B9D,#FF1493)",height:"auto"}} onClick={()=>{playPop();onPick("pairing");}}>
+          <button className="b-btn" style={{...S.modeBtn,background:"linear-gradient(135deg,#FF6B9D,#FF1493)",height:"auto"}} onClick={()=>{playPop();onPick(category.id==="colors"?"sorting":"pairing");}}>
             <span className="b-wiggle" style={{fontSize:"2.5rem",filter:"drop-shadow(0 0 10px rgba(255,107,157,0.6))"}}>🃏</span>
-            <div><div style={{fontWeight:800,fontSize:"1.2rem"}}>PAIR THEM UP!</div><div style={{fontSize:"0.78rem",opacity:0.9}}>Match the pairs together</div></div>
+            <div><div style={{fontWeight:800,fontSize:"1.2rem"}}>{category.id==="colors"?"COLOR MEMORY!":"PAIR THEM UP!"}</div><div style={{fontSize:"0.78rem",opacity:0.9}}>{category.id==="colors"?"Flip cards to find matching pairs":"Match the pairs together"}</div></div>
           </button>
           <button className="b-btn" style={{...S.modeBtn,background:"linear-gradient(135deg,#7B3F00,#FF6B00)",height:"auto"}} onClick={()=>{playPop();onPick("voice");}}>
             <span className="b-wiggle" style={{fontSize:"2.5rem",filter:"drop-shadow(0 0 10px rgba(255,107,0,0.6))"}}>🎤</span>
@@ -1681,9 +1745,10 @@ export default function App(){
   else if(screen==="teacher") content=<TeacherDashboard students={students} onDeleteStudent={deleteStudent} onBack={()=>setScreen("home")}/>;
   else if(screen==="categories") content=<CategoryPicker student={currentStudent} onPick={cat=>{setSelectedCategory(cat);setScreen("mode");}} onHome={()=>setScreen("home")}/>;
   else if(screen==="mode") content=<ModePicker category={selectedCategory} student={currentStudent} onMode={m=>setScreen(m==="module"?"module":"activity_pick")} onBack={()=>setScreen("categories")}/>;
-  else if(screen==="activity_pick") content=<ActivityPicker category={selectedCategory} student={currentStudent} onPick={t=>setScreen(t==="voice"?"voice":t==="pairing"?"pairing":"matching")} onBack={()=>setScreen("mode")}/>;
+  else if(screen==="activity_pick") content=<ActivityPicker category={selectedCategory} student={currentStudent} onPick={t=>setScreen(t==="voice"?"voice":t==="pairing"?"pairing":t==="sorting"?"sorting":"matching")} onBack={()=>setScreen("mode")}/>;
   else if(screen==="voice") content=<VoiceActivity category={selectedCategory} speed={speed} onEarn={earnStar} onBack={()=>setScreen("categories")} student={currentStudent}/>;
   else if(screen==="pairing") content=<PairingGame category={selectedCategory} speed={speed} onEarn={earnStar} onBack={()=>setScreen("categories")} student={currentStudent}/>;
+  else if(screen==="sorting") content=<ColorSortingGame onEarn={earnStar} onBack={()=>setScreen("categories")} student={currentStudent}/>;
   else if(screen==="matching") content=<MatchingActivity category={selectedCategory} speed={speed} onEarn={earnStar} onBack={()=>setScreen("categories")} student={currentStudent}/>;
   else if(screen==="module"){
     if(selectedCategory.id==="alphabets") content=<AlphabetModule onBack={()=>setScreen("mode")}/>;
