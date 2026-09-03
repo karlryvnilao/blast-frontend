@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { LOGO } from "./logo.js";
+import { createStudent, getStudents, getToken, guestLogin, updateStudent } from "./api.js";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const NUMBERS  = Array.from({ length: 10 }, (_, i) => i);
@@ -16,7 +17,7 @@ const SHAPES = [
 const COLORS = [
   {name:"Red",hex:"#FF4444",image:"/images/red.png"},{name:"Blue",hex:"#4488FF",image:"/images/blue.png"},{name:"Yellow",hex:"#FFDD00",image:"/images/yellow.png"},
   {name:"Green",hex:"#44BB44",image:"/images/green.png"},{name:"Orange",hex:"#FF8800",image:"/images/oray.png"},{name:"Violet",hex:"#9944CC",image:"/images/violet.png"},
-  {name:"Pink",hex:"#FF77AA",image:"/images/pink.png"},{name:"Brown",hex:"#885533",image:"/images/brown.png"},{name:"Black",hex:"#222222",image:"/images/black.png"},{name:"White",hex:"#EEEEEE"},
+  {name:"Pink",hex:"#FF77AA",image:"/images/pink.png"},{name:"Brown",hex:"#885533",image:"/images/brown.png"},{name:"Black",hex:"#222222",image:"/images/black.png"},{name:"White",hex:"#EEEEEE",image:"/images/white.png"},
 ];
 const CATEGORIES = [
   {id:"alphabets",label:"Alphabets",emoji:"🔤",color1:"#FF0080",color2:"#7B00D4",mascot:"🦄",glow:"#FF0080"},
@@ -648,18 +649,6 @@ function HomeScreen({students,currentStudent,onLogin,onSwitchAccount,onStart,onT
               <p style={{fontSize:"0.88rem",color:"#aaa",margin:"4px 0 8px",fontWeight:700}}>👋 Welcome back! PIN (optional):</p>
               <input style={S.input} placeholder="PIN" type="password" value={pin} onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleNext()} maxLength={4}/>
             </>}
-            {students.length>0&&(
-              <div style={{marginBottom:12}}>
-                <p style={{fontSize:"0.82rem",color:"#aaa",marginBottom:6,fontWeight:700}}>👇 Or tap your name:</p>
-                <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center"}}>
-                  {students.map(s=>(
-                    <button key={s.name} className="b-btn" style={{...S.namePill,display:"flex",alignItems:"center",gap:6}} onClick={()=>{playTick();setNameInput(s.name);}}>
-                      <AvatarDisplay avatarId={s.avatar} size="sm"/>{s.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
             <button className="b-btn" style={S.btnStart} onClick={handleNext} disabled={!nameInput.trim()}>
               {isExisting?"🎈 Let's Go!":"➡️ Next: Pick Avatar!"}
             </button>
@@ -779,7 +768,7 @@ function AlphabetModule({onBack}){
           <div style={{fontSize:"8rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#FF6B6B",filter:"drop-shadow(2px 2px 0px rgba(128,0,0,0.8)) drop-shadow(-2px -2px 0px rgba(0,0,0,0.2))"}}>{letter.toLowerCase()}</div>
         </div>
         <div className="b-wiggle" style={{fontSize:"4rem",margin:"6px 0"}}>{EMOJIS[letter]}</div>
-        <button className="b-btn" style={{...S.soundBtn,background:"linear-gradient(135deg,#7B2FBE,#FF6B6B)",color:"#fff"}} onClick={()=>speak(letter,speed==="slow"?0.1:0.9)}>🔊 Hear it!</button>
+        <button className="b-btn" style={{...S.soundBtn,background:"linear-gradient(135deg,#7B2FBE,#FF6B6B)",color:"#fff"}} onClick={()=>speak(letter.toLowerCase(),speed==="slow"?0.1:0.9)}>🔊 Hear it!</button>
       </div>
     </ModuleShell>
   );
@@ -966,7 +955,9 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
               <img src={SHAPES.find(s=>s.emoji===opt)?.matchImage} alt={SHAPES.find(s=>s.emoji===opt)?.name||opt} style={{width:90,height:70,objectFit:"contain"}} />
             ):q.type==="color"?(
               <span title={opt} aria-label={opt} style={{display:"inline-block",width:52,height:52,borderRadius:"50%",background:COLORS.find(c=>c.name===opt)?.hex||"#ddd",border:"3px solid rgba(255,255,255,0.9)",boxShadow:"0 0 18px rgba(0,0,0,0.15)"}} />
-            ):<span>{opt}</span>}</button>
+            ):q.type==="number"?(
+              <span aria-label={`${opt} stars`} style={{display:"flex",maxWidth:110,justifyContent:"center",flexWrap:"wrap",gap:2,fontSize:"1.25rem",lineHeight:1}}>{Array.from({length:Number(opt)},(_,index)=><span key={index}>⭐</span>)}</span>
+            ):<span>{q.type==="letter"?opt.toLowerCase():opt}</span>}</button>
           ))}
         </div>
         {result&&result!=="done"&&<div style={{textAlign:"center"}}><button className="b-btn" style={S.navBtn} onClick={next}>{qIdx+1>=questions.length?"Finish 🎉":"Next ▶"}</button></div>}
@@ -975,7 +966,7 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
   );
 }
 
-// ─── PAIRING GAME (Visual Matching) ────────────────────────────────────────
+// ─── MEMORY GAME ──────────────────────────────────────────────────────────
 function PairingGame({category,speed,onEarn,onBack,student}){
   const [pairs,setPairs]=useState([]);
   const [matched,setMatched]=useState(new Set());
@@ -984,8 +975,9 @@ function PairingGame({category,speed,onEarn,onBack,student}){
   const [compliment,setCompliment]=useState("");
   const [timerKey,setTimerKey]=useState(0);
   const [timeUp,setTimeUp]=useState(false);
+  const [showResult,setShowResult]=useState(false);
   const timeLimit=speed==="fast"?20:45;
-  const totalPairs=6;
+  const totalPairs=5;
 
   useEffect(()=>{generatePairs();},[category]);
 
@@ -1001,25 +993,26 @@ function PairingGame({category,speed,onEarn,onBack,student}){
       const nums=shuffle(NUMBERS).slice(0,totalPairs);
       pairList=nums.map(n=>([
         {id:`num-${n}`,type:"number",value:n,display:n},
-        {id:`obj-${n}`,type:"number",value:n,display:`${n} objects`}
+        {id:`obj-${n}`,type:"number",value:n,display:n}
       ])).flat();
     }else if(category.id==="colors"){
       const colors=shuffle(COLORS).slice(0,totalPairs);
       pairList=colors.map(c=>([
-        {id:`rect-${c.hex}`,type:"color",value:c.hex,display:c.hex,label:c.name},
-        {id:`name-${c.hex}`,type:"color",value:c.hex,display:c.name}
+        {id:`color-a-${c.hex}`,type:"color",value:c.hex,display:c.hex,image:c.image},
+        {id:`color-b-${c.hex}`,type:"color",value:c.hex,display:c.hex,image:c.image}
       ])).flat();
     }else if(category.id==="shapes"){
       const shapes=shuffle(SHAPES).slice(0,totalPairs);
       pairList=shapes.map(s=>([
-        {id:`emoji-${s.name}`,type:"shape",value:s.name,display:s.emoji},
-        {id:`name-${s.name}`,type:"shape",value:s.name,display:s.name}
+        {id:`shape-a-${s.name}`,type:"shape",value:s.name,display:s.emoji},
+        {id:`shape-b-${s.name}`,type:"shape",value:s.name,display:s.emoji}
       ])).flat();
     }
     setPairs(shuffle(pairList));
     setMatched(new Set());
     setSelected([]);
     setCompliment("");
+    setShowResult(false);
     setTimerKey(k=>k+1);
   }
 
@@ -1043,10 +1036,12 @@ function PairingGame({category,speed,onEarn,onBack,student}){
         setCompliment(msg);
         playCorrect();onEarn(1);
         setShowConfetti(true);
-        setMatched(new Set([...matched,newSelected[0].id,newSelected[1].id]));
+        const updatedMatched=new Set([...matched,newSelected[0].id,newSelected[1].id]);
+        setMatched(updatedMatched);
         setTimeout(()=>speak(msg,0.9),300);
         setTimeout(()=>setShowConfetti(false),2500);
         setTimeout(()=>setSelected([]),800);
+        if(updatedMatched.size===totalPairs*2)setTimeout(()=>setShowResult(true),900);
       }else{
         const msg=randomOf(WRONG_COMPLIMENTS);
         setCompliment(msg);
@@ -1057,32 +1052,16 @@ function PairingGame({category,speed,onEarn,onBack,student}){
     }
   }
 
-  const isDone=matched.size===totalPairs*2;
+  const isDone=showResult;
 
   if(isDone)return <GameResult score={matched.size/2} total={totalPairs} emoji="🎉" title="PERFECT!" onBack={onBack} student={student}/>;
 
   const renderItem=(item)=>{
-    if(category.id==="numbers"&&item.type==="number"&&item.id.startsWith("obj-")){
-      const num=parseInt(item.id.split("-")[1]);
-      return(
-        <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center",alignItems:"center"}}>
-          {Array.from({length:num}).map((_,i)=><div key={i} style={{width:20,height:20,borderRadius:"50%",background:"#263238",boxShadow:"0 0 8px rgba(38,50,56,0.65)"}}/>)}
-        </div>
-      );
-    }else if(category.id==="colors"&&item.type==="color"&&item.id.startsWith("rect-")){
-      const color=COLORS.find(c=>c.hex===item.value);
-      return(
-        <img src={color?.image} alt={color?.name||item.display} style={{width:86,height:86,objectFit:"contain"}}/>
-      );
-    }else if(category.id==="colors"&&item.type==="color"&&item.id.startsWith("name-")){
-      const color=COLORS.find(c=>c.hex===item.value);
-      return <div title={color?.name||item.display} aria-label={color?.name||item.display} style={{width:86,height:86,borderRadius:"50%",background:color?.hex||"#ddd",border:"3px solid white",boxShadow:`0 0 14px ${color?.hex||"#ddd"}88`}}/>;
-    }else if(category.id==="shapes"&&item.type==="shape"&&item.id.startsWith("emoji-")){
+    if(category.id==="colors"&&item.type==="color"){
+      return <img src={item.image} alt="" style={{width:86,height:86,objectFit:"contain"}}/>;
+    }else if(category.id==="shapes"&&item.type==="shape"){
       const shape=SHAPES.find(s=>s.name===item.value);
-      return <img src={shape?.matchImage} alt={shape?.name||item.display} style={{width:86,height:86,objectFit:"contain"}}/>;
-    }else if(category.id==="shapes"&&item.type==="shape"&&item.id.startsWith("name-")){
-      const shape=SHAPES.find(s=>s.name===item.value);
-      return <img src={shape?.matchImage} alt={item.display} style={{width:86,height:86,objectFit:"contain"}}/>;
+      return <img src={shape?.matchImage} alt="" style={{width:86,height:86,objectFit:"contain"}}/>;
     }
     return <div style={{fontSize:category.id==="alphabets"?"2.5rem":"1.8rem",fontWeight:900,fontFamily:"'Lilita One',cursive"}}>{item.display}</div>;
   };
@@ -1101,26 +1080,16 @@ function PairingGame({category,speed,onEarn,onBack,student}){
       )}
       <div style={{position:"relative",zIndex:1}}>
         <button className="b-btn" style={S.backBtn} onClick={()=>{playTick();stopBgMusic();startBgMusic("menu");onBack();}}>← Back</button>
-        <h2 style={{...S.title,fontSize:"1.6rem",textAlign:"center",margin:"4px 0 6px"}}>🃏 Tap and Match!</h2>
+        <h2 style={{...S.title,fontSize:"1.6rem",textAlign:"center",margin:"4px 0 6px"}}>🃏 Memory Game</h2>
         <p style={{textAlign:"center",color:"#aaa",fontWeight:700,marginBottom:8,fontFamily:"'Baloo 2',cursive"}}>Matched: {matched.size/2}/{totalPairs} | ⭐{matched.size/2}</p>
         {matched.size<totalPairs*2&&<CountdownTimer key={timerKey} seconds={timeLimit} onDone={handleTimeout} speed={speed}/>}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,maxWidth:380,margin:"12px auto",padding:"0 12px"}}>
           {pairs.map((item,idx)=>(
-            <button key={item.id} className="b-btn" onClick={()=>handlePairClick(item)} disabled={matched.has(item.id)} style={{
-              padding:"16px 12px",borderRadius:16,border:"3px solid",cursor:matched.has(item.id)?"default":"pointer",
-              background:matched.has(item.id)?"linear-gradient(135deg,#2ECC71,#27AE60)":selected.some(s=>s.id===item.id)?"linear-gradient(135deg,#FFD54F,#FF9800)":"linear-gradient(135deg,#ECF0F1,#BDC3C7)",
-              color:matched.has(item.id)||selected.some(s=>s.id===item.id)?"#fff":"#2C3E50",
-              borderColor:matched.has(item.id)?"#27AE60":selected.some(s=>s.id===item.id)?"#FF9800":"#95A5A6",
-              fontWeight:900,fontSize:"1rem",
-              boxShadow:matched.has(item.id)?"0 4px 15px #27AE6066":selected.some(s=>s.id===item.id)?"0 0 22px #FFB300":"0 3px 10px rgba(0,0,0,0.15)",
-              transform:selected.some(s=>s.id===item.id)?"scale(0.95)":"scale(1)",
-              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:100,
-              opacity:matched.has(item.id)?0.6:1,
-              animation:matched.has(item.id)?"pop 0.4s ease":"none",
-              transition:"all 0.15s"
-            }}>
-              {renderItem(item)}
-              <div style={{fontSize:"0.75rem",fontWeight:700,marginTop:6,color:"inherit"}}>{item.type==="number"&&!item.id.startsWith("obj-")?item.display:item.type==="color"&&item.id.startsWith("rect-")?"Color":item.label||""}</div>
+            <button key={item.id} className="b-btn" onClick={()=>handlePairClick(item)} disabled={matched.has(item.id)} aria-label={selected.some(s=>s.id===item.id)||matched.has(item.id)?"Face-up memory card":"Face-down memory card"} style={{padding:0,minHeight:112,border:"none",background:"transparent",cursor:matched.has(item.id)?"default":"pointer",perspective:800}}>
+              <span style={{display:"flex",position:"relative",width:"100%",height:112,alignItems:"center",justifyContent:"center",transformStyle:"preserve-3d",transform:selected.some(s=>s.id===item.id)||matched.has(item.id)?"rotateY(180deg)":"rotateY(0deg)",transition:"transform 0.45s"}}>
+                <span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",backfaceVisibility:"hidden",borderRadius:16,border:"4px solid #8E44AD",background:"linear-gradient(135deg,#9B59B6,#5B2C6F)",color:"#fff",fontSize:"2.8rem",fontWeight:900}}>?</span>
+                <span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",backfaceVisibility:"hidden",transform:"rotateY(180deg)",borderRadius:16,border:`4px solid ${matched.has(item.id)?"#27AE60":"#FFD54F"}`,background:"linear-gradient(135deg,#fff,#ECF0F1)"}}>{renderItem(item)}</span>
+              </span>
             </button>
           ))}
         </div>
@@ -1602,7 +1571,7 @@ function ActivityPicker({category,student,onPick,onBack}){
         <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:380,margin:"0 auto",padding:"0 12px"}}>
           <button className="b-btn" style={{...S.modeBtn,background:"linear-gradient(135deg,#FF6B9D,#FF1493)",height:"auto"}} onClick={()=>{playPop();onPick(category.id==="colors"?"sorting":"pairing");}}>
             <span className="b-wiggle" style={{fontSize:"2.5rem",filter:"drop-shadow(0 0 10px rgba(255,107,157,0.6))"}}>🃏</span>
-            <div><div style={{fontWeight:800,fontSize:"1.2rem"}}>{category.id==="colors"?"COLOR MEMORY!":"PAIR THEM UP!"}</div><div style={{fontSize:"0.78rem",opacity:0.9}}>{category.id==="colors"?"Flip cards to find matching pairs":"Match the pairs together"}</div></div>
+            <div><div style={{fontWeight:800,fontSize:"1.2rem"}}>MEMORY GAME</div><div style={{fontSize:"0.78rem",opacity:0.9}}>Flip cards to find matching pairs</div></div>
           </button>
           <button className="b-btn" style={{...S.modeBtn,background:"linear-gradient(135deg,#7B3F00,#FF6B00)",height:"auto"}} onClick={()=>{playPop();onPick("voice");}}>
             <span className="b-wiggle" style={{fontSize:"2.5rem",filter:"drop-shadow(0 0 10px rgba(255,107,0,0.6))"}}>🎤</span>
@@ -1626,36 +1595,19 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
   const [firestoreStudents,setFirestoreStudents]=useState(students);
   const TEACHER_PIN="1234";
   
-  // Always load the shared teacher roster from the backend/database, not the local device cache.
   useEffect(()=>{
     async function fetchStudentsFromDatabase() {
       try {
-        let token = getToken();
-        if (!token) {
-          const guest = await guestLogin();
-          token = guest?.token || getToken();
+        if(!getToken())await guestLogin();
+        try{
+          setFirestoreStudents(await getStudents());
+        }catch(error){
+          await guestLogin();
+          setFirestoreStudents(await getStudents());
         }
-
-        if (!token) {
-          setFirestoreStudents([]);
-          return;
-        }
-
-        const apiStudents = await getLeaderboard(50);
-        const liveData = (apiStudents || []).map((student) => ({
-          id: student.id || student.name,
-          name: student.name || '',
-          avatar: student.avatar || 'unicorn',
-          pin: student.pin || '',
-          stars: Number(student.stars || 0),
-          joined: student.joined || (student.createdAt ? new Date(student.createdAt).toLocaleDateString() : 'Today'),
-          games_played: Number(student.games_played || 0),
-        }));
-
-        setFirestoreStudents(liveData);
       } catch (err) {
         console.error('[Dashboard] Error fetching database students:', err.message);
-        setFirestoreStudents([]);
+        setFirestoreStudents(students);
       }
     }
     
@@ -1664,7 +1616,7 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
       const interval = setInterval(fetchStudentsFromDatabase, 3000);
       return () => clearInterval(interval);
     }
-  }, [unlocked]);
+  }, [unlocked, students]);
   
   const sorted=[...firestoreStudents].sort((a,b)=>b.stars-a.stars);
   const topStudent = sorted[0] || null;
@@ -1779,40 +1731,18 @@ export default function App(){
   const [selectedCategory,setSelectedCategory]=useState(null);
   const [speed,setSpeed]=useState("slow");
 
-   // Sync students from Firestore on app load
+  // Load the teacher's saved database roster when the app starts.
   useEffect(()=>{
     async function initializeApp(){
       try{
         if(!getToken()){
-          console.log('[App] No token found, logging in as guest...');
-          const guest = await guestLogin();
-          console.log('[App] Guest login successful', guest?.teacher?.id || getUserId());
+          await guestLogin();
         }
-
-        const teacherId = getUserId();
-        if(!teacherId){
-          console.warn('[App] No teacher ID after login');
-          return;
-        }
-
         try {
-          const studentsRef = collection(db, 'teachers', teacherId, 'students');
-          const snapshot = await getDocs(studentsRef);
-          const firestoreStudents = [];
-          snapshot.forEach(doc => {
-            const data = doc.data();
-            firestoreStudents.push({
-              id: data.id || doc.id,
-              name: data.name || '',
-              avatar: data.avatar || 'unicorn',
-              pin: data.pin || '',
-              stars: data.stars || 0,
-              joined: data.joined || (data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'Today'),
-            });
-          });
-          if (firestoreStudents.length > 0) saveStudents(firestoreStudents);
-        } catch (firestoreErr) {
-          console.warn('[App] Firestore fetch failed, using backend roster instead:', firestoreErr.message);
+          saveStudents(await getStudents());
+        } catch (error) {
+          await guestLogin();
+          saveStudents(await getStudents());
         }
       }catch(err){
         console.error('[App] Initialization error:',err.message);
@@ -1828,6 +1758,21 @@ export default function App(){
     if(!ex){ex={name,stars:0,pin:pin||"",avatar:avatar||"unicorn",joined:new Date().toLocaleDateString()};saveStudents([...students,ex]);}
     setCurrentStudent(ex);localStorage.setItem("blast_current",JSON.stringify(ex));
     setScreen("categories");
+    void (async()=>{
+      try{
+        if(!getToken())await guestLogin();
+        const savedStudent=await createStudent(ex.name,ex.avatar,ex.pin);
+        const saved={...ex,...savedStudent,stars:Number(savedStudent.stars||0)};
+        saveStudents(students.some(s=>s.name===saved.name)?students.map(s=>s.name===saved.name?saved:s):[...students,saved]);
+        setCurrentStudent(current=>{
+          if(current?.name!==saved.name)return current;
+          localStorage.setItem("blast_current",JSON.stringify(saved));
+          return saved;
+        });
+      }catch(error){
+        console.error("Could not save student to the database:",error);
+      }
+    })();
   }
 
   function earnStar(n=1){
@@ -1835,6 +1780,9 @@ export default function App(){
     const up={...currentStudent,stars:currentStudent.stars+n};
     setCurrentStudent(up);localStorage.setItem("blast_current",JSON.stringify(up));
     saveStudents(students.map(s=>s.name===up.name?up:s));
+    if(up.id){
+      updateStudent(up.id,{stars:up.stars}).catch(error=>console.error("Could not save stars to the database:",error));
+    }
   }
 
   function switchAccount(){setCurrentStudent(null);localStorage.removeItem("blast_current");stopBgMusic();startBgMusic("menu");setScreen("home");}
