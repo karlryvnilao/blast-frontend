@@ -1,26 +1,22 @@
 import { useState, useEffect, useRef } from "react";
 import { LOGO } from "./logo.js";
-import { earnStarAPI, createStudent, updateStudent, guestLogin, getLeaderboard, getStudents } from "./api.js";
-import { db } from "./firebase.js";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
-import { getToken, getUserId } from "./api.js";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const NUMBERS  = Array.from({ length: 10 }, (_, i) => i);
 const SHAPES = [
-  { name:"Heart",     emoji:"♡", color:"#FF4FA3", image:"/images/heart.png" },
-  { name:"Diamond",   emoji:"⃟", color:"#24C6FF", image:"/images/diamond.png" },
-  { name:"Circle",    emoji:"◯", color:"#FFB800", image:"/images/circle.png" },
-  { name:"Rectangle", emoji:"▭", color:"#7C4DFF", image:"/images/rect.png" },
-  { name:"Square",    emoji:"☐", color:"#00C853", image:"/images/square.png" },
-  { name:"Star",      emoji:"☆", color:"#FFD93D", image:"/images/star.png" },
-  { name:"Oval",      emoji:"⬭", color:"#FF6F61", image:"/images/oval.png" },
-  { name:"Triangle",  emoji:"△", color:"#3EA7FF", image:"/images/tria.png" },
+  { name:"Heart",     emoji:"♡", color:"#FF4FA3", image:"/images/heart.png", matchImage:"/images/puso.png" },
+  { name:"Diamond",   emoji:"⃟", color:"#24C6FF", image:"/images/diamond.png", matchImage:"/images/kite.png" },
+  { name:"Circle",    emoji:"◯", color:"#FFB800", image:"/images/circle.png", matchImage:"/images/ball.png" },
+  { name:"Rectangle", emoji:"▭", color:"#7C4DFF", image:"/images/rect.png", matchImage:"/images/doormat.png" },
+  { name:"Square",    emoji:"☐", color:"#00C853", image:"/images/square.png", matchImage:"/images/box.png" },
+  { name:"Star",      emoji:"☆", color:"#FFD93D", image:"/images/star.png", matchImage:"/images/starfish.png" },
+  { name:"Oval",      emoji:"⬭", color:"#FF6F61", image:"/images/oval.png", matchImage:"/images/egg.png" },
+  { name:"Triangle",  emoji:"△", color:"#3EA7FF", image:"/images/tria.png", matchImage:"/images/pyramid.png" },
 ];
 const COLORS = [
-  {name:"Red",hex:"#FF4444"},{name:"Blue",hex:"#4488FF"},{name:"Yellow",hex:"#FFDD00"},
-  {name:"Green",hex:"#44BB44"},{name:"Orange",hex:"#FF8800"},{name:"Violet",hex:"#9944CC"},
-  {name:"Pink",hex:"#FF77AA"},{name:"Brown",hex:"#885533"},{name:"Black",hex:"#222222"},{name:"White",hex:"#EEEEEE"},
+  {name:"Red",hex:"#FF4444",image:"/images/red.png"},{name:"Blue",hex:"#4488FF",image:"/images/blue.png"},{name:"Yellow",hex:"#FFDD00",image:"/images/yellow.png"},
+  {name:"Green",hex:"#44BB44",image:"/images/green.png"},{name:"Orange",hex:"#FF8800",image:"/images/oray.png"},{name:"Violet",hex:"#9944CC",image:"/images/violet.png"},
+  {name:"Pink",hex:"#FF77AA",image:"/images/pink.png"},{name:"Brown",hex:"#885533",image:"/images/brown.png"},{name:"Black",hex:"#222222",image:"/images/black.png"},{name:"White",hex:"#EEEEEE"},
 ];
 const CATEGORIES = [
   {id:"alphabets",label:"Alphabets",emoji:"🔤",color1:"#FF0080",color2:"#7B00D4",mascot:"🦄",glow:"#FF0080"},
@@ -841,7 +837,7 @@ function ColorModule({onBack}){
       navRow={<div style={S.navRow}><button className="b-btn" style={S.navBtn} onClick={()=>{playFlip();setIdx(i=>Math.max(0,i-1));}} disabled={idx===0}>◀ Prev</button><div style={S.navPill}>{idx+1} / 10</div><button className="b-btn" style={S.navBtn} onClick={()=>{playFlip();setIdx(i=>Math.min(9,i+1));}} disabled={idx===9}>Next ▶</button></div>}>
       <div key={color.name+speed} className="b-spin" style={{...S.moduleCard,background:"#FFFFFF",border:`6px solid ${color.hex}`,boxShadow:`0 8px 40px ${color.hex}88`}}>
         <p style={{fontWeight:900,fontSize:"2rem",color:color.hex,fontFamily:"'Lilita One',cursive",marginBottom:8,textShadow:"1px 1px 0 rgba(0,0,0,0.1)"}}>{color.name}</p>
-        <div className="b-float" style={{width:180,height:180,borderRadius:"50%",background:color.hex,margin:"0 auto 16px",border:"8px solid white",boxShadow:`0 0 0 4px ${color.hex},0 12px 40px ${color.hex}88`}}/>
+        <img className="b-float" src={color.image} alt={color.name} style={{display:"block",width:"min(260px,80vw)",height:190,objectFit:"contain",margin:"0 auto 16px",filter:"drop-shadow(0 10px 18px rgba(0,0,0,0.15))"}} />
         <button className="b-btn" style={{...S.soundBtn,background:color.hex,color:"#fff"}} onClick={()=>speak(color.name,speed==="slow"?0.1:0.9)}>🔊 Hear it!</button>
       </div>
     </ModuleShell>
@@ -882,22 +878,12 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
 
   useEffect(()=>{ generate(); },[category]);
 
-  const NUMBER_EMOJIS=["💖","⭐","🌟","🍎","🎈","🌼","🍋","✨","⚽","🎁"];
-
-  function randomEmojiCount(count){
-    return Array.from({ length: count }, () => randomOf(NUMBER_EMOJIS)).join(" ");
-  }
-
-  function numberEmoji(count, emoji="💖"){
-    return Array.from({ length: count }, () => emoji).join(" ");
-  }
-
   function generate(){
     let pool=[];
     if(category.id==="alphabets") pool=ALPHABET.map(l=>({question:l,correct:l,distractors:shuffle(ALPHABET.filter(x=>x!==l)).slice(0,3),type:"letter"}));
     else if(category.id==="numbers") pool=NUMBERS.map(n=>({question:String(n),correct:String(n),distractors:shuffle(NUMBERS.filter(x=>x!==n).map(String)).slice(0,3),type:"number"}));
     else if(category.id==="shapes") pool=SHAPES.map(s=>({question:s.emoji,correct:s.emoji,distractors:shuffle(SHAPES.filter(x=>x.name!==s.name).map(x=>x.emoji)).slice(0,3),type:"shape",color:s.color,name:s.name}));
-    else if(category.id==="colors") pool=COLORS.map(c=>({question:c.hex,correct:c.name,distractors:shuffle(COLORS.filter(x=>x.name!==c.name).map(x=>x.name)).slice(0,3),type:"color",colorHex:c.hex}));
+    else if(category.id==="colors") pool=COLORS.map(c=>({question:c.hex,correct:c.name,distractors:shuffle(COLORS.filter(x=>x.name!==c.name).map(x=>x.name)).slice(0,3),type:"color"}));
     const qs=shuffle(pool).slice(0,6).map(q=>({...q,options:shuffle([q.correct,...q.distractors])}));
     setQuestions(qs);setQIdx(0);setSelected(null);setResult(null);setScore(0);setCompliment("");setTimerKey(k=>k+1);
   }
@@ -911,7 +897,7 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
   }
 
   const q=questions[qIdx];
-  const shapeImage=q?.type==="shape"?SHAPES.find(s=>s.name===q.correct)?.image:null;
+  const colorImage=q?.type==="color"?COLORS.find(c=>c.name===q.correct)?.image:null;
 
   function pick(opt){
     if(result)return;
@@ -951,9 +937,9 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
         {!result&&<CountdownTimer key={timerKey} seconds={timeLimit} onDone={handleTimeout} speed={speed}/>}
         <div key={qIdx} className="b-bounce" style={{...S.moduleCard,background:"linear-gradient(160deg,#FFF9C4,#FFEAA7)",border:"4px solid #FFD700",boxShadow:"0 8px 30px rgba(255,215,0,0.4)"}}>
           <p style={{fontWeight:800,color:"#E65100",marginBottom:10,fontFamily:"'Baloo 2',cursive",fontSize:"1rem"}}>What is this? 🤔</p>
-          {q.type==="color"?(<div style={{width:120,height:120,borderRadius:"50%",background:q.colorHex || q.question,margin:"0 auto 10px",border:"6px solid white",boxShadow:`0 0 30px ${q.colorHex || q.question}88`}}/>)
-          :q.type==="shape"&&shapeImage?(<img src={shapeImage} alt={q.correct} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 0 18px rgba(0,0,0,0.12))"}} />)
-          :q.type==="number"?(<div style={{fontSize:"4rem",lineHeight:1,textAlign:"center",fontWeight:900,color:"#7B2FBE",filter:"drop-shadow(3px 3px 0 #FFD700)"}}>{q.question}</div>)
+          {q.type==="color"?(<img src={colorImage} alt={q.correct} style={{display:"block",width:"min(220px,80vw)",height:180,objectFit:"contain",margin:"0 auto 10px",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 0 18px rgba(0,0,0,0.12))"}} />)
+          :q.type==="shape"?(<div style={{fontSize:"6rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#7B2FBE",filter:"drop-shadow(3px 3px 0 #FFD700)"}}>{q.question}</div>)
+          :q.type==="number"?(<img src={`/images/${q.question}.png`} alt={`Number ${q.question}`} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 4px 8px rgba(0,0,0,0.15))"}} />)
           :(<div style={{fontSize:"6rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#7B2FBE",filter:"drop-shadow(3px 3px 0 #FFD700)"}}>{q.question}</div>)}
           {compliment&&(
             <div className="b-compliment" style={{
@@ -975,25 +961,11 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
               fontWeight:900,fontSize:q.type==="shape"?"2.5rem":"1.1rem",padding:q.type==="shape"?"20px":"12px",
               boxShadow:selected===opt?(opt===q.correct?"0 4px 20px #27AE6066":"0 4px 20px #C0392B66"):"0 3px 10px rgba(0,0,0,0.15)",
               display:"flex",alignItems:"center",justifyContent:"center",minHeight:"80px"
-            }}>
-              {q.type==="color" ? (
-                <span style={{
-                  display:"inline-block",
-                  width:44,
-                  height:44,
-                  borderRadius:12,
-                  background: COLORS.find(c => c.name === opt)?.hex || "#ddd",
-                  border:"3px solid rgba(255,255,255,0.85)",
-                  boxShadow:"0 0 18px rgba(0,0,0,0.15)",
-                }} />
-              ) : q.type==="number" ? (
-                <span style={{fontSize:"1.7rem", whiteSpace:"pre-wrap", lineHeight:1.3}}>{randomEmojiCount(Number(opt))}</span>
-              ) : q.type==="shape" ? (
-                opt
-              ) : (
-                <span>{opt}</span>
-              )}
-            </button>
+            }}>{q.type==="shape"?(
+              <img src={SHAPES.find(s=>s.emoji===opt)?.matchImage} alt={SHAPES.find(s=>s.emoji===opt)?.name||opt} style={{width:90,height:70,objectFit:"contain"}} />
+            ):q.type==="color"?(
+              <span title={opt} aria-label={opt} style={{display:"inline-block",width:52,height:52,borderRadius:"50%",background:COLORS.find(c=>c.name===opt)?.hex||"#ddd",border:"3px solid rgba(255,255,255,0.9)",boxShadow:"0 0 18px rgba(0,0,0,0.15)"}} />
+            ):<span>{opt}</span>}</button>
           ))}
         </div>
         {result&&result!=="done"&&<div style={{textAlign:"center"}}><button className="b-btn" style={S.navBtn} onClick={next}>{qIdx+1>=questions.length?"Finish 🎉":"Next ▶"}</button></div>}
@@ -1097,14 +1069,16 @@ function PairingGame({category,speed,onEarn,onBack,student}){
         </div>
       );
     }else if(category.id==="colors"&&item.type==="color"&&item.id.startsWith("rect-")){
+      const color=COLORS.find(c=>c.hex===item.value);
       return(
-        <div style={{width:80,height:80,borderRadius:12,background:item.display,border:"3px solid white",boxShadow:`0 0 12px ${item.display}88`}}/>
+        <img src={color?.image} alt={color?.name||item.display} style={{width:86,height:86,objectFit:"contain"}}/>
       );
     }else if(category.id==="shapes"&&item.type==="shape"&&item.id.startsWith("emoji-")){
-      return <div style={{fontSize:"3rem"}}>{item.display}</div>;
+      const shape=SHAPES.find(s=>s.name===item.value);
+      return <img src={shape?.matchImage} alt={shape?.name||item.display} style={{width:86,height:86,objectFit:"contain"}}/>;
     }else if(category.id==="shapes"&&item.type==="shape"&&item.id.startsWith("name-")){
       const shape=SHAPES.find(s=>s.name===item.value);
-      return <img src={shape?.image} alt={item.display} style={{width:60,height:60,objectFit:"contain"}}/>;
+      return <img src={shape?.matchImage} alt={item.display} style={{width:86,height:86,objectFit:"contain"}}/>;
     }
     return <div style={{fontSize:category.id==="alphabets"?"2.5rem":"1.8rem",fontWeight:900,fontFamily:"'Lilita One',cursive"}}>{item.display}</div>;
   };
@@ -1130,11 +1104,11 @@ function PairingGame({category,speed,onEarn,onBack,student}){
           {pairs.map((item,idx)=>(
             <button key={item.id} className="b-btn" onClick={()=>handlePairClick(item)} disabled={matched.has(item.id)} style={{
               padding:"16px 12px",borderRadius:16,border:"3px solid",cursor:matched.has(item.id)?"default":"pointer",
-              background:matched.has(item.id)?"linear-gradient(135deg,#2ECC71,#27AE60)":"linear-gradient(135deg,#ECF0F1,#BDC3C7)",
-              color:matched.has(item.id)?"#fff":"#2C3E50",
-              borderColor:matched.has(item.id)?"#27AE60":"#95A5A6",
+              background:matched.has(item.id)?"linear-gradient(135deg,#2ECC71,#27AE60)":selected.some(s=>s.id===item.id)?"linear-gradient(135deg,#FFD54F,#FF9800)":"linear-gradient(135deg,#ECF0F1,#BDC3C7)",
+              color:matched.has(item.id)||selected.some(s=>s.id===item.id)?"#fff":"#2C3E50",
+              borderColor:matched.has(item.id)?"#27AE60":selected.some(s=>s.id===item.id)?"#FF9800":"#95A5A6",
               fontWeight:900,fontSize:"1rem",
-              boxShadow:matched.has(item.id)?"0 4px 15px #27AE6066":"0 3px 10px rgba(0,0,0,0.15)",
+              boxShadow:matched.has(item.id)?"0 4px 15px #27AE6066":selected.some(s=>s.id===item.id)?"0 0 22px #FFB300":"0 3px 10px rgba(0,0,0,0.15)",
               transform:selected.some(s=>s.id===item.id)?"scale(0.95)":"scale(1)",
               display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:100,
               opacity:matched.has(item.id)?0.6:1,
@@ -1183,6 +1157,7 @@ function VoiceActivity({category,speed,onEarn,onBack,student}){
   },[category]);
 
   const current = items[currentIdx];
+  const currentColor = current?.label ? COLORS.find(c=>c.name===current.label) : null;
 
   const NUM_WORDS_MAP={"0":"zero","1":"one","2":"two","3":"three","4":"four",
     "5":"five","6":"six","7":"seven","8":"eight","9":"nine","10":"ten",
@@ -1448,11 +1423,8 @@ function VoiceActivity({category,speed,onEarn,onBack,student}){
 
           {category.id==="colors"?(
             <>
-              <p style={{fontWeight:900,fontSize:"1.6rem",color:COLORS.find(c=>c.name===current.label)?.hex,fontFamily:"'Lilita One',cursive",marginBottom:4}}>{current.label}</p>
-              <div style={{width:130,height:130,borderRadius:"50%",
-                background:COLORS.find(c=>c.name===current.label)?.hex||"#ccc",
-                margin:"0 auto 10px",border:"6px solid white",
-                boxShadow:`0 0 30px ${COLORS.find(c=>c.name===current.label)?.hex}88`}}/>
+              <p style={{fontWeight:900,fontSize:"1.6rem",color:currentColor?.hex,fontFamily:"'Lilita One',cursive",marginBottom:4}}>{current.label}</p>
+              <img src={currentColor?.image} alt={current.label} style={{display:"block",width:"min(220px,80vw)",height:180,objectFit:"contain",margin:"0 auto 10px",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 0 18px rgba(0,0,0,0.12))"}} />
             </>
           ):category.id==="shapes"?(
             <>
@@ -1587,51 +1559,8 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
   const [pin,setPin]=useState("");
   const [unlocked,setUnlocked]=useState(false);
   const [tab,setTab]=useState("students");
-  const [firestoreStudents,setFirestoreStudents]=useState(students);
   const TEACHER_PIN="1234";
-  
-  // Always load the shared teacher roster from the backend/database, not the local device cache.
-  useEffect(()=>{
-    async function fetchStudentsFromDatabase() {
-      try {
-        let token = getToken();
-        if (!token) {
-          const guest = await guestLogin();
-          token = guest?.token || getToken();
-        }
-
-        if (!token) {
-          setFirestoreStudents([]);
-          return;
-        }
-
-        const apiStudents = await getLeaderboard(50);
-        const liveData = (apiStudents || []).map((student) => ({
-          id: student.id || student.name,
-          name: student.name || '',
-          avatar: student.avatar || 'unicorn',
-          pin: student.pin || '',
-          stars: Number(student.stars || 0),
-          joined: student.joined || (student.createdAt ? new Date(student.createdAt).toLocaleDateString() : 'Today'),
-          games_played: Number(student.games_played || 0),
-        }));
-
-        setFirestoreStudents(liveData);
-      } catch (err) {
-        console.error('[Dashboard] Error fetching database students:', err.message);
-        setFirestoreStudents([]);
-      }
-    }
-    
-    if (unlocked) {
-      fetchStudentsFromDatabase();
-      const interval = setInterval(fetchStudentsFromDatabase, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [unlocked]);
-  
-  const sorted=[...firestoreStudents].sort((a,b)=>b.stars-a.stars);
-  const topStudent = sorted[0] || null;
+  const sorted=[...students].sort((a,b)=>b.stars-a.stars);
   const medals=["🥇","🥈","🥉"];
   const borders=["#FFD700","#C0C0C0","#CD7F32"];
 
@@ -1657,23 +1586,7 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
         <div style={{textAlign:"center",marginBottom:16}}>
           <div style={{fontSize:"3rem"}}>🍎</div>
           <h2 style={{...S.title,fontSize:"1.9rem",margin:"4px 0"}}>Teacher Dashboard</h2>
-          <p style={{color:"#aaa",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>{firestoreStudents.length} students registered</p>
-          {topStudent && (
-            <div style={{
-              margin:"10px auto 0",
-              maxWidth:420,
-              background:"linear-gradient(135deg, rgba(255,215,0,0.18), rgba(255,128,0,0.12))",
-              border:"2px solid rgba(255,215,0,0.5)",
-              borderRadius:16,
-              padding:"10px 14px",
-              color:"#fff",
-              fontWeight:800,
-              fontFamily:"'Baloo 2',cursive",
-              boxShadow:"0 0 22px rgba(255,215,0,0.22)",
-            }}>
-              🏆 Top Student: <span style={{color:"#FFD700"}}>{topStudent.name}</span> • ⭐ {topStudent.stars}
-            </div>
-          )}
+          <p style={{color:"#aaa",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>{students.length} students registered</p>
         </div>
         {/* TABS */}
         <div style={{display:"flex",gap:10,maxWidth:480,margin:"0 auto 16px",padding:"0 4px"}}>
@@ -1719,7 +1632,7 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
                 <AvatarDisplay avatarId={s.avatar} size="sm"/>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:800,fontSize:"1.1rem",color:"#fff",fontFamily:"'Baloo 2',cursive"}}>{s.name}</div>
-                  <div style={{color:"#888",fontSize:"0.78rem"}}>📊 {s.games_played||0} games | Joined: {s.joined||"Today"}</div>
+                  <div style={{color:"#888",fontSize:"0.78rem"}}>Joined: {s.joined||"Today"}</div>
                 </div>
                 <div style={{textAlign:"right"}}>
                   <div style={{fontWeight:900,fontSize:"1.5rem",color:"#FFD700",textShadow:"0 0 10px #FFD700"}}>⭐ {s.stars}</div>
@@ -1743,85 +1656,20 @@ export default function App(){
   const [selectedCategory,setSelectedCategory]=useState(null);
   const [speed,setSpeed]=useState("slow");
 
-  // Sync students from Firestore on app load
-  useEffect(()=>{
-    async function initializeApp(){
-      try{
-        if(!getToken()){
-          console.log('[App] No token found, logging in as guest...');
-          const guest = await guestLogin();
-          console.log('[App] Guest login successful', guest?.teacher?.id || getUserId());
-        }
-
-        const teacherId = getUserId();
-        if(!teacherId){
-          console.warn('[App] No teacher ID after login');
-          return;
-        }
-
-        try {
-          const studentsRef = collection(db, 'teachers', teacherId, 'students');
-          const snapshot = await getDocs(studentsRef);
-          const firestoreStudents = [];
-          snapshot.forEach(doc => {
-            const data = doc.data();
-            firestoreStudents.push({
-              id: data.id || doc.id,
-              name: data.name || '',
-              avatar: data.avatar || 'unicorn',
-              pin: data.pin || '',
-              stars: data.stars || 0,
-              joined: data.joined || (data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'Today'),
-            });
-          });
-          if (firestoreStudents.length > 0) saveStudents(firestoreStudents);
-        } catch (firestoreErr) {
-          console.warn('[App] Firestore fetch failed, using backend roster instead:', firestoreErr.message);
-        }
-      }catch(err){
-        console.error('[App] Initialization error:',err.message);
-      }
-    }
-    initializeApp();
-  },[]);
-
   function saveStudents(list){setStudents(list);localStorage.setItem("blast_students",JSON.stringify(list));}
 
-  async function login(name,pin,avatar){
+  function login(name,pin,avatar){
     let ex=students.find(s=>s.name.toLowerCase()===name.toLowerCase());
-    if(!ex){
-      ex={name,stars:0,pin:pin||"",avatar:avatar||"unicorn",joined:new Date().toLocaleDateString()};
-      saveStudents([...students,ex]);
-      // Also create in backend/Firestore
-      try {
-        const result = await createStudent(name, avatar, pin);
-        ex.id = result.id; // Store the Firebase ID
-        saveStudents([...students.filter(s=>s.name!==name), ex]);
-      } catch(err) {
-        console.error("[API] Error creating student:", err.message);
-      }
-    }
+    if(!ex){ex={name,stars:0,pin:pin||"",avatar:avatar||"unicorn",joined:new Date().toLocaleDateString()};saveStudents([...students,ex]);}
     setCurrentStudent(ex);localStorage.setItem("blast_current",JSON.stringify(ex));
     setScreen("categories");
   }
 
-  async function earnStar(n=1){
+  function earnStar(n=1){
     if(!currentStudent)return;
     const up={...currentStudent,stars:currentStudent.stars+n};
-    setCurrentStudent(up);
-    localStorage.setItem("blast_current",JSON.stringify(up));
+    setCurrentStudent(up);localStorage.setItem("blast_current",JSON.stringify(up));
     saveStudents(students.map(s=>s.name===up.name?up:s));
-    // Save stars to Firestore database
-    try {
-      if(currentStudent.id) {
-        await earnStarAPI(currentStudent.id, n);
-      } else {
-        // If no ID, use updateStudent instead
-        await updateStudent(currentStudent.name, {stars: up.stars});
-      }
-    } catch(err) {
-      console.error("[API] Error saving stars:", err.message);
-    }
   }
 
   function switchAccount(){setCurrentStudent(null);localStorage.removeItem("blast_current");stopBgMusic();startBgMusic("menu");setScreen("home");}
