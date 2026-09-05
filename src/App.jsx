@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { LOGO } from "./logo.js";
-import { createStudent, getStudents, getToken, guestLogin, updateStudent } from "./api.js";
+import { createStudent, deleteStudentAPI, getStudents, getToken, guestLogin, updateStudent } from "./api.js";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const NUMBERS  = Array.from({ length: 10 }, (_, i) => i);
@@ -1596,6 +1596,7 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
   const [unlocked,setUnlocked]=useState(false);
   const [tab,setTab]=useState("students");
   const [studentPage,setStudentPage]=useState(0);
+  const [leaderboardPage,setLeaderboardPage]=useState(0);
   const [firestoreStudents,setFirestoreStudents]=useState(students);
   const TEACHER_PIN="1234";
   const STUDENTS_PER_PAGE=10;
@@ -1628,6 +1629,9 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
   const studentPageCount=Math.max(1,Math.ceil(studentsByTime.length/STUDENTS_PER_PAGE));
   const currentStudentPage=Math.min(studentPage,studentPageCount-1);
   const pagedStudents=studentsByTime.slice(currentStudentPage*STUDENTS_PER_PAGE,(currentStudentPage+1)*STUDENTS_PER_PAGE);
+  const leaderboardPageCount=Math.max(1,Math.ceil(sorted.length/STUDENTS_PER_PAGE));
+  const currentLeaderboardPage=Math.min(leaderboardPage,leaderboardPageCount-1);
+  const pagedLeaderboard=sorted.slice(currentLeaderboardPage*STUDENTS_PER_PAGE,(currentLeaderboardPage+1)*STUDENTS_PER_PAGE);
   const topStudent = sorted[0] || null;
   const medals=["🥇","🥈","🥉"];
   const borders=["#FFD700","#C0C0C0","#CD7F32"];
@@ -1675,7 +1679,7 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
         {/* TABS */}
         <div style={{display:"flex",gap:10,maxWidth:480,margin:"0 auto 16px",padding:"0 4px"}}>
           {[{id:"students",label:"👨‍🎓 Students"},{id:"leaderboard",label:"🏆 Leaderboard"}].map(t=>(
-            <button key={t.id} className="b-btn" onClick={()=>{playTick();setTab(t.id);setStudentPage(0);}} style={{
+            <button key={t.id} className="b-btn" onClick={()=>{playTick();setTab(t.id);setStudentPage(0);setLeaderboardPage(0);}} style={{
               flex:1,padding:"10px 0",borderRadius:14,fontWeight:800,fontFamily:"'Baloo 2',cursive",fontSize:"0.9rem",cursor:"pointer",
               background:tab===t.id?"linear-gradient(135deg,#FF0080,#7B00D4)":"rgba(255,255,255,0.06)",
               color:"#fff",border:`2px solid ${tab===t.id?"#FF0080":"rgba(255,255,255,0.15)"}`,
@@ -1698,8 +1702,7 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
                   <div style={{color:"#aaa",fontSize:"0.78rem"}}>Joined: {s.joined||"Today"}</div>
                 </div>
                 <div style={{textAlign:"right"}}>
-                  <div style={{fontWeight:900,fontSize:"1.2rem",color:"#FFD700",textShadow:"0 0 8px #FFD700"}}>⭐ {s.stars}</div>
-                  <button className="b-btn" style={{background:"rgba(255,0,0,0.2)",color:"#FF6666",border:"2px solid rgba(255,0,0,0.4)",borderRadius:10,padding:"3px 10px",cursor:"pointer",fontSize:"0.72rem",fontFamily:"'Baloo 2',cursive",fontWeight:700,marginTop:4}} onClick={()=>{if(window.confirm(`Remove ${s.name}?`))onDeleteStudent(s.name);}}>🗑️ Remove</button>
+                  <button className="b-btn" style={{background:"rgba(255,0,0,0.2)",color:"#FF6666",border:"2px solid rgba(255,0,0,0.4)",borderRadius:10,padding:"3px 10px",cursor:"pointer",fontSize:"0.72rem",fontFamily:"'Baloo 2',cursive",fontWeight:700,marginTop:4}} onClick={()=>{if(window.confirm(`Remove ${s.name}?`))onDeleteStudent(s);}}>🗑️ Remove</button>
                 </div>
               </div>
                 );
@@ -1714,16 +1717,19 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
             </>
           ):(
             sorted.length===0?<p style={{textAlign:"center",color:"#aaa",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>No players yet!</p>
-            :sorted.map((s,i)=>(
+            :<>
+              {pagedLeaderboard.map((s,i)=>{
+                const rank=currentLeaderboardPage*STUDENTS_PER_PAGE+i;
+                return (
               <div key={s.name} className="b-slide" style={{
-                background:i===0?"linear-gradient(135deg,#3D1A00,#8B4500)":i===1?"linear-gradient(135deg,#1a1a1a,#2d2d2d)":i===2?"linear-gradient(135deg,#1a1500,#3d3000)":"rgba(255,255,255,0.04)",
-                border:`3px solid ${borders[i]||"rgba(255,255,255,0.1)"}`,
+                background:rank===0?"linear-gradient(135deg,#3D1A00,#8B4500)":rank===1?"linear-gradient(135deg,#1a1a1a,#2d2d2d)":rank===2?"linear-gradient(135deg,#1a1500,#3d3000)":"rgba(255,255,255,0.04)",
+                border:`3px solid ${borders[rank]||"rgba(255,255,255,0.1)"}`,
                 borderRadius:20,padding:"14px 18px",marginBottom:12,
                 display:"flex",alignItems:"center",gap:14,
-                boxShadow:i===0?"0 0 30px rgba(255,215,0,0.4)":"none",
+                boxShadow:rank===0?"0 0 30px rgba(255,215,0,0.4)":"none",
                 animationDelay:`${i*0.08}s`,
               }}>
-                <div style={{fontSize:"2.2rem",minWidth:44,textAlign:"center"}}>{medals[i]||`#${i+1}`}</div>
+                <div style={{fontSize:"2.2rem",minWidth:44,textAlign:"center"}}>{medals[rank]||`#${rank+1}`}</div>
                 <AvatarDisplay avatarId={s.avatar} size="sm"/>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:800,fontSize:"1.1rem",color:"#fff",fontFamily:"'Baloo 2',cursive"}}>{s.name}</div>
@@ -1734,7 +1740,16 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
                   <div style={{fontSize:"0.7rem",color:"#888"}}>stars</div>
                 </div>
               </div>
-            ))
+                );
+              })}
+              {leaderboardPageCount>1&&(
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,margin:"16px 0 8px"}}>
+                  <button className="b-btn" disabled={currentLeaderboardPage===0} onClick={()=>{playTick();setLeaderboardPage(page=>Math.max(0,page-1));}} style={{...S.btnStart,padding:"8px 14px",margin:0,opacity:currentLeaderboardPage===0?0.45:1}}>← Previous</button>
+                  <span style={{color:"#ddd",fontWeight:800,fontFamily:"'Baloo 2',cursive"}}>{currentLeaderboardPage+1} - {leaderboardPageCount}</span>
+                  <button className="b-btn" disabled={currentLeaderboardPage===leaderboardPageCount-1} onClick={()=>{playTick();setLeaderboardPage(page=>Math.min(leaderboardPageCount-1,page+1));}} style={{...S.btnStart,padding:"8px 14px",margin:0,opacity:currentLeaderboardPage===leaderboardPageCount-1?0.45:1}}>Next →</button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -1806,7 +1821,16 @@ export default function App(){
   }
 
   function switchAccount(){setCurrentStudent(null);localStorage.removeItem("blast_current");stopBgMusic();startBgMusic("menu");setScreen("home");}
-  function deleteStudent(name){saveStudents(students.filter(s=>s.name!==name));if(currentStudent?.name===name)switchAccount();}
+  async function deleteStudent(student){
+    try{
+      if(student.id)await deleteStudentAPI(student.id);
+      saveStudents(students.filter(s=>s.id!==student.id&&s.name!==student.name));
+      if(currentStudent?.name===student.name)switchAccount();
+    }catch(error){
+      console.error("Could not remove student from the database:",error);
+      alert("Could not remove this student. Please try again.");
+    }
+  }
 
   let content;
   if(showSplash) content=<SplashScreen onDone={()=>setShowSplash(false)}/>;
