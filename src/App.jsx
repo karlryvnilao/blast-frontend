@@ -762,11 +762,7 @@ function AlphabetModule({onBack}){
         </div>
       }>
       <div key={letter+speed} className="b-spin" style={{...S.moduleCard,background:"linear-gradient(160deg,#FF6B6B,#FFE66D)",border:"4px solid #fff",boxShadow:"0 8px 40px rgba(255,107,107,0.5)"}}>
-        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,marginBottom:10}}>
-          <div style={{fontSize:"8rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#7B2FBE",filter:"drop-shadow(2px 2px 0px rgba(128,0,0,0.8)) drop-shadow(-2px -2px 0px rgba(0,0,0,0.2))"}}>{letter}</div>
-          <div style={{width:5,height:100,background:"linear-gradient(#7B2FBE,#FF6B6B,#FFE66D)",borderRadius:4,margin:"0 6px"}}/>
-          <div style={{fontSize:"8rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#FF6B6B",filter:"drop-shadow(2px 2px 0px rgba(128,0,0,0.8)) drop-shadow(-2px -2px 0px rgba(0,0,0,0.2))"}}>{letter.toLowerCase()}</div>
-        </div>
+        <img src={`/images/Letters/${letter}.png`} alt={`Letter ${letter}`} style={{display:"block",width:"min(280px,80vw)",height:220,objectFit:"contain",margin:"0 auto 10px",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.25))"}}/>
         <div className="b-wiggle" style={{fontSize:"4rem",margin:"6px 0"}}>{EMOJIS[letter]}</div>
         <button className="b-btn" style={{...S.soundBtn,background:"linear-gradient(135deg,#7B2FBE,#FF6B6B)",color:"#fff"}} onClick={()=>speak(letter.toLowerCase(),speed==="slow"?0.1:0.9)}>🔊 Hear it!</button>
       </div>
@@ -930,6 +926,7 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
           {q.type==="color"?(<img src={colorImage} alt={q.correct} style={{display:"block",width:"min(220px,80vw)",height:180,objectFit:"contain",margin:"0 auto 10px",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 0 18px rgba(0,0,0,0.12))"}} />)
           :q.type==="shape"&&shapeImage?(<img src={shapeImage} alt={q.correct} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 0 18px rgba(0,0,0,0.12))"}} />)
           :q.type==="number"?(<img src={`/images/${q.question}.png`} alt={`Number ${q.question}`} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 4px 8px rgba(0,0,0,0.15))"}} />)
+          :q.type==="letter"?(<img src={`/images/Letters/${q.question}.png`} alt={`Letter ${q.question}`} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.25))"}} />)
           :(<div style={{fontSize:"6rem",lineHeight:1,fontFamily:"'Lilita One',cursive",color:"#7B2FBE",filter:"drop-shadow(3px 3px 0 #FFD700)"}}>{q.question}</div>)}
           {compliment&&(
             <div className="b-compliment" style={{
@@ -957,7 +954,9 @@ function MatchingActivity({category,speed,onEarn,onBack,student}){
               <span title={opt} aria-label={opt} style={{display:"inline-block",width:52,height:52,borderRadius:"50%",background:COLORS.find(c=>c.name===opt)?.hex||"#ddd",border:"3px solid rgba(255,255,255,0.9)",boxShadow:"0 0 18px rgba(0,0,0,0.15)"}} />
             ):q.type==="number"?(
               <span aria-label={`${opt} stars`} style={{display:"flex",maxWidth:110,justifyContent:"center",flexWrap:"wrap",gap:2,fontSize:"1.25rem",lineHeight:1}}>{Array.from({length:Number(opt)},(_,index)=><span key={index}>⭐</span>)}</span>
-            ):<span>{q.type==="letter"?opt.toLowerCase():opt}</span>}</button>
+            ):q.type==="letter"?(
+              <img src={`/images/Letters/${opt}.png`} alt={`Letter ${opt}`} style={{width:90,height:70,objectFit:"contain"}} />
+            ):<span>{opt}</span>}</button>
           ))}
         </div>
         {result&&result!=="done"&&<div style={{textAlign:"center"}}><button className="b-btn" style={S.navBtn} onClick={next}>{qIdx+1>=questions.length?"Finish 🎉":"Next ▶"}</button></div>}
@@ -1057,7 +1056,9 @@ function PairingGame({category,speed,onEarn,onBack,student}){
   if(isDone)return <GameResult score={matched.size/2} total={totalPairs} emoji="🎉" title="PERFECT!" onBack={onBack} student={student}/>;
 
   const renderItem=(item)=>{
-    if(category.id==="colors"&&item.type==="color"){
+    if(category.id==="alphabets"&&item.type==="letter"){
+      return <img src={`/images/Letters/${item.value}.png`} alt={`Letter ${item.value}`} style={{width:86,height:86,objectFit:"contain"}}/>;
+    }else if(category.id==="colors"&&item.type==="color"){
       return <img src={item.image} alt="" style={{width:86,height:86,objectFit:"contain"}}/>;
     }else if(category.id==="shapes"&&item.type==="shape"){
       const shape=SHAPES.find(s=>s.name===item.value);
@@ -1408,6 +1409,8 @@ function VoiceActivity({category,speed,onEarn,onBack,student}){
             </>
           ):category.id==="numbers"?(
             <img src={`/images/${current.label}.png`} alt={`Number ${current.label}`} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(2px 2px 0 rgba(128,0,0,0.5)) drop-shadow(0 4px 8px rgba(0,0,0,0.15))"}} />
+          ):category.id==="alphabets"?(
+            <img src={`/images/Letters/${current.label}.png`} alt={`Letter ${current.label}`} style={{display:"block",width:"min(220px,80vw)",height:220,objectFit:"contain",margin:"0 auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.25))"}} />
           ):(
             <div style={{fontSize:"6rem",lineHeight:1,fontFamily:"'Lilita One',cursive",
               color:"#7B2FBE",filter:"drop-shadow(3px 3px 0 #CE93D8)"}}>
@@ -1592,8 +1595,10 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
   const [pin,setPin]=useState("");
   const [unlocked,setUnlocked]=useState(false);
   const [tab,setTab]=useState("students");
+  const [studentPage,setStudentPage]=useState(0);
   const [firestoreStudents,setFirestoreStudents]=useState(students);
   const TEACHER_PIN="1234";
+  const STUDENTS_PER_PAGE=10;
   
   useEffect(()=>{
     async function fetchStudentsFromDatabase() {
@@ -1619,6 +1624,10 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
   }, [unlocked, students]);
   
   const sorted=[...firestoreStudents].sort((a,b)=>b.stars-a.stars);
+  const studentsByTime=[...firestoreStudents].sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+  const studentPageCount=Math.max(1,Math.ceil(studentsByTime.length/STUDENTS_PER_PAGE));
+  const currentStudentPage=Math.min(studentPage,studentPageCount-1);
+  const pagedStudents=studentsByTime.slice(currentStudentPage*STUDENTS_PER_PAGE,(currentStudentPage+1)*STUDENTS_PER_PAGE);
   const topStudent = sorted[0] || null;
   const medals=["🥇","🥈","🥉"];
   const borders=["#FFD700","#C0C0C0","#CD7F32"];
@@ -1666,7 +1675,7 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
         {/* TABS */}
         <div style={{display:"flex",gap:10,maxWidth:480,margin:"0 auto 16px",padding:"0 4px"}}>
           {[{id:"students",label:"👨‍🎓 Students"},{id:"leaderboard",label:"🏆 Leaderboard"}].map(t=>(
-            <button key={t.id} className="b-btn" onClick={()=>{playTick();setTab(t.id);}} style={{
+            <button key={t.id} className="b-btn" onClick={()=>{playTick();setTab(t.id);setStudentPage(0);}} style={{
               flex:1,padding:"10px 0",borderRadius:14,fontWeight:800,fontFamily:"'Baloo 2',cursive",fontSize:"0.9rem",cursor:"pointer",
               background:tab===t.id?"linear-gradient(135deg,#FF0080,#7B00D4)":"rgba(255,255,255,0.06)",
               color:"#fff",border:`2px solid ${tab===t.id?"#FF0080":"rgba(255,255,255,0.15)"}`,
@@ -1677,10 +1686,12 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
 
         <div style={{maxWidth:480,margin:"0 auto"}}>
           {tab==="students"?(
-            sorted.length===0?<p style={{textAlign:"center",color:"#555",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>No students yet!</p>
-            :sorted.map((s,i)=>(
+            studentsByTime.length===0?<p style={{textAlign:"center",color:"#555",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>No students yet!</p>
+            :<>
+              {pagedStudents.map((s,i)=>{
+                return (
               <div key={s.name} style={{background:"rgba(255,255,255,0.04)",borderRadius:18,padding:"12px 18px",marginBottom:10,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 14px rgba(0,0,0,0.3)",border:"2px solid rgba(255,255,255,0.08)"}}>
-                <div style={{fontSize:"1.8rem",minWidth:40,textAlign:"center"}}>{medals[i]||`#${i+1}`}</div>
+                <div style={{fontSize:"1.8rem",minWidth:40,textAlign:"center"}}>👨‍🎓</div>
                 <AvatarDisplay avatarId={s.avatar} size="sm"/>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:800,fontSize:"1rem",color:"#fff",fontFamily:"'Baloo 2',cursive"}}>{s.name}</div>
@@ -1691,7 +1702,16 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
                   <button className="b-btn" style={{background:"rgba(255,0,0,0.2)",color:"#FF6666",border:"2px solid rgba(255,0,0,0.4)",borderRadius:10,padding:"3px 10px",cursor:"pointer",fontSize:"0.72rem",fontFamily:"'Baloo 2',cursive",fontWeight:700,marginTop:4}} onClick={()=>{if(window.confirm(`Remove ${s.name}?`))onDeleteStudent(s.name);}}>🗑️ Remove</button>
                 </div>
               </div>
-            ))
+                );
+              })}
+              {studentPageCount>1&&(
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,margin:"16px 0 8px"}}>
+                  <button className="b-btn" disabled={currentStudentPage===0} onClick={()=>{playTick();setStudentPage(page=>Math.max(0,page-1));}} style={{...S.btnStart,padding:"8px 14px",margin:0,opacity:currentStudentPage===0?0.45:1}}>← Previous</button>
+                  <span style={{color:"#ddd",fontWeight:800,fontFamily:"'Baloo 2',cursive"}}>{currentStudentPage+1} - {studentPageCount}</span>
+                  <button className="b-btn" disabled={currentStudentPage===studentPageCount-1} onClick={()=>{playTick();setStudentPage(page=>Math.min(studentPageCount-1,page+1));}} style={{...S.btnStart,padding:"8px 14px",margin:0,opacity:currentStudentPage===studentPageCount-1?0.45:1}}>Next →</button>
+                </div>
+              )}
+            </>
           ):(
             sorted.length===0?<p style={{textAlign:"center",color:"#aaa",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>No players yet!</p>
             :sorted.map((s,i)=>(
