@@ -115,7 +115,7 @@ async function syncTeacherData(teacherData) {
       schoolName: teacherData.schoolName,
       pin: teacherData.pin,
       updatedAt: new Date().toISOString(),
-    });
+    }, { merge: true });
   } catch (err) {
     console.error('[Firestore] Error syncing teacher data:', err.message);
   }
@@ -127,7 +127,6 @@ async function syncStudentData(studentData, teacherId) {
       id: studentData.id,
       name: studentData.name,
       avatar: studentData.avatar,
-      pin: studentData.pin,
       stars: studentData.stars || 0,
       createdAt: studentData.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -144,8 +143,8 @@ export const changePin     = (pin) => req('PUT',  '/api/teacher/pin', { pin });
 // ─── STUDENTS ─────────────────────────────────────────────────────────────────
 export const getStudents = () => req('GET', '/api/students');
 
-export async function createStudent(name, avatar, pin) {
-  const data = await req('POST', '/api/students', { name, avatar, pin });
+export async function createStudent(name, avatar) {
+  const data = await req('POST', '/api/students', { name, avatar });
   if (_userId && data?.id) {
     await syncStudentData(data, _userId);
   }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { LOGO } from "./logo.js";
-import { createStudent, deleteStudentAPI, getStudents, getToken, guestLogin, updateStudent } from "./api.js";
+import { changePin, createStudent, deleteStudentAPI, getStudents, getToken, guestLogin, updateStudent, verifyPin } from "./api.js";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const NUMBERS  = Array.from({ length: 10 }, (_, i) => i);
@@ -591,7 +591,6 @@ function SplashScreen({onDone}){
 function HomeScreen({students,currentStudent,onLogin,onSwitchAccount,onStart,onTeacher}){
   const [step,setStep]=useState("login");
   const [nameInput,setNameInput]=useState("");
-  const [pin,setPin]=useState("");
   const [selectedAvatar,setSelectedAvatar]=useState("unicorn");
 
   useEffect(()=>{startBgMusic("menu");},[]);
@@ -599,14 +598,14 @@ function HomeScreen({students,currentStudent,onLogin,onSwitchAccount,onStart,onT
   function handleNext(){
     if(!nameInput.trim())return;
     const isExisting=students.some(s=>s.name.toLowerCase()===nameInput.trim().toLowerCase());
-    if(isExisting){playCorrect();onLogin(nameInput.trim(),pin,null);setNameInput("");setPin("");}
+    if(isExisting){playCorrect();onLogin(nameInput.trim(),null);setNameInput("");}
     else setStep("avatar");
   }
 
   function handleCreate(){
     playCorrect();
-    onLogin(nameInput.trim(),pin,selectedAvatar);
-    setNameInput("");setPin("");setStep("login");
+    onLogin(nameInput.trim(),selectedAvatar);
+    setNameInput("");setStep("login");
   }
 
   const isExisting=students.some(s=>s.name.toLowerCase()===nameInput.trim().toLowerCase());
@@ -645,10 +644,6 @@ function HomeScreen({students,currentStudent,onLogin,onSwitchAccount,onStart,onT
           <div style={{width:"100%"}}>
             <p style={{fontWeight:800,marginBottom:8,color:"#FFD700",fontFamily:"'Baloo 2',cursive",fontSize:"1rem"}}>✏️ Type your name:</p>
             <input style={S.input} placeholder="Your name here..." value={nameInput} onChange={e=>setNameInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleNext()}/>
-            {isExisting&&<>
-              <p style={{fontSize:"0.88rem",color:"#aaa",margin:"4px 0 8px",fontWeight:700}}>👋 Welcome back! PIN (optional):</p>
-              <input style={S.input} placeholder="PIN" type="password" value={pin} onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleNext()} maxLength={4}/>
-            </>}
             <button className="b-btn" style={S.btnStart} onClick={handleNext} disabled={!nameInput.trim()}>
               {isExisting?"🎈 Let's Go!":"➡️ Next: Pick Avatar!"}
             </button>
@@ -1593,13 +1588,41 @@ function ActivityPicker({category,student,onPick,onBack}){
 // ─── TEACHER DASHBOARD — only teacher sees leaderboard ─────────────────────
 function TeacherDashboard({students,onDeleteStudent,onBack}){
   const [pin,setPin]=useState("");
+  const [pinError,setPinError]=useState("");
   const [unlocked,setUnlocked]=useState(false);
   const [tab,setTab]=useState("students");
   const [studentPage,setStudentPage]=useState(0);
   const [leaderboardPage,setLeaderboardPage]=useState(0);
   const [firestoreStudents,setFirestoreStudents]=useState(students);
-  const TEACHER_PIN="1234";
+  const [newPin,setNewPin]=useState("");
+  const [confirmPin,setConfirmPin]=useState("");
+  const [pinSaveMsg,setPinSaveMsg]=useState("");
   const STUDENTS_PER_PAGE=10;
+
+  async function handleUnlock(){
+    try{
+      if(!getToken())await guestLogin();
+      const res=await verifyPin(pin);
+      if(res?.ok){playCorrect();setUnlocked(true);setPinError("");}
+      else{playWrong();setPinError("Wrong PIN!");}
+    }catch(error){
+      console.error("Could not verify PIN:",error);
+      playWrong();setPinError("Could not verify PIN. Try again.");
+    }
+  }
+
+  async function handleSetPassword(){
+    if(!newPin||newPin.length<4){setPinSaveMsg("PIN must be at least 4 digits.");return;}
+    if(newPin!==confirmPin){setPinSaveMsg("PINs do not match.");return;}
+    try{
+      await changePin(newPin);
+      setPinSaveMsg("✅ Password updated!");
+      setNewPin("");setConfirmPin("");
+    }catch(error){
+      console.error("Could not update teacher PIN:",error);
+      setPinSaveMsg("❌ Could not update password.");
+    }
+  }
   
   useEffect(()=>{
     async function fetchStudentsFromDatabase() {
@@ -1644,8 +1667,9 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
           <div style={{fontSize:"4rem"}}>🍎</div>
           <h2 style={{...S.title,fontSize:"1.9rem",margin:"8px 0"}}>Teacher's Corner</h2>
           <p style={{color:"#aaa",marginBottom:16,fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>Enter PIN to access dashboard</p>
-          <input style={S.input} type="password" placeholder="PIN (default: 1234)" value={pin} onChange={e=>setPin(e.target.value)} maxLength={4}/>
-          <button className="b-btn" style={S.btnStart} onClick={()=>{if(pin===TEACHER_PIN){playCorrect();setUnlocked(true);}else{playWrong();alert("Wrong PIN!");}}}>🔓 Unlock</button>
+          <input style={S.input} type="password" placeholder="Enter Pin" value={pin} onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleUnlock()} maxLength={10}/>
+          {pinError&&<p style={{color:"#FF6666",fontWeight:700,margin:"6px 0 0"}}>{pinError}</p>}
+          <button className="b-btn" style={S.btnStart} onClick={handleUnlock}>🔓 Unlock</button>
         </div>
       </div>
     </div>
@@ -1678,7 +1702,7 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
         </div>
         {/* TABS */}
         <div style={{display:"flex",gap:10,maxWidth:480,margin:"0 auto 16px",padding:"0 4px"}}>
-          {[{id:"students",label:"👨‍🎓 Students"},{id:"leaderboard",label:"🏆 Leaderboard"}].map(t=>(
+          {[{id:"students",label:"👨‍🎓 Students"},{id:"leaderboard",label:"🏆 Leaderboard"},{id:"settings",label:"⚙️ Settings"}].map(t=>(
             <button key={t.id} className="b-btn" onClick={()=>{playTick();setTab(t.id);setStudentPage(0);setLeaderboardPage(0);}} style={{
               flex:1,padding:"10px 0",borderRadius:14,fontWeight:800,fontFamily:"'Baloo 2',cursive",fontSize:"0.9rem",cursor:"pointer",
               background:tab===t.id?"linear-gradient(135deg,#FF0080,#7B00D4)":"rgba(255,255,255,0.06)",
@@ -1715,7 +1739,7 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
                 </div>
               )}
             </>
-          ):(
+          ):tab==="leaderboard"?(
             sorted.length===0?<p style={{textAlign:"center",color:"#aaa",fontWeight:700,fontFamily:"'Baloo 2',cursive"}}>No players yet!</p>
             :<>
               {pagedLeaderboard.map((s,i)=>{
@@ -1750,6 +1774,15 @@ function TeacherDashboard({students,onDeleteStudent,onBack}){
                 </div>
               )}
             </>
+          ):(
+            <div style={{background:"rgba(255,255,255,0.04)",borderRadius:18,padding:"20px",border:"2px solid rgba(255,255,255,0.08)"}}>
+              <h3 style={{color:"#fff",fontFamily:"'Baloo 2',cursive",margin:"0 0 12px"}}>🔑 Set Teacher Password (PIN)</h3>
+              <p style={{color:"#aaa",fontSize:"0.85rem",marginBottom:12}}>This PIN unlocks the Teacher's Corner dashboard.</p>
+              <input style={S.input} type="password" placeholder="New PIN" value={newPin} onChange={e=>setNewPin(e.target.value)} maxLength={10}/>
+              <input style={{...S.input,marginTop:8}} type="password" placeholder="Confirm PIN" value={confirmPin} onChange={e=>setConfirmPin(e.target.value)} maxLength={10}/>
+              {pinSaveMsg&&<p style={{color:pinSaveMsg.startsWith("✅")?"#66FF99":"#FF6666",fontWeight:700,margin:"8px 0 0"}}>{pinSaveMsg}</p>}
+              <button className="b-btn" style={{...S.btnStart,marginTop:12}} onClick={handleSetPassword}>💾 Save Password</button>
+            </div>
           )}
         </div>
       </div>
@@ -1788,15 +1821,15 @@ export default function App(){
 
   function saveStudents(list){setStudents(list);localStorage.setItem("blast_students",JSON.stringify(list));}
 
-  function login(name,pin,avatar){
+  function login(name,avatar){
     let ex=students.find(s=>s.name.toLowerCase()===name.toLowerCase());
-    if(!ex){ex={name,stars:0,pin:pin||"",avatar:avatar||"unicorn",joined:new Date().toLocaleDateString()};saveStudents([...students,ex]);}
+    if(!ex){ex={name,stars:0,avatar:avatar||"unicorn",joined:new Date().toLocaleDateString()};saveStudents([...students,ex]);}
     setCurrentStudent(ex);localStorage.setItem("blast_current",JSON.stringify(ex));
     setScreen("categories");
     void (async()=>{
       try{
         if(!getToken())await guestLogin();
-        const savedStudent=await createStudent(ex.name,ex.avatar,ex.pin);
+        const savedStudent=await createStudent(ex.name,ex.avatar);
         const saved={...ex,...savedStudent,stars:Number(savedStudent.stars||0)};
         saveStudents(students.some(s=>s.name===saved.name)?students.map(s=>s.name===saved.name?saved:s):[...students,saved]);
         setCurrentStudent(current=>{
